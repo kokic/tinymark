@@ -1,5 +1,5 @@
 ///|
-type HtmlNode = @sexp_html.SexpNode
+type HtmlNode = @sexp.SexpNode
 
 ///|
 priv struct Binding {
@@ -14,7 +14,7 @@ pub fn altsia_to_sexp_nodes(source : String) -> Result[Array[HtmlNode], String] 
 
 ///|
 pub fn altsia_to_html(source : String) -> Result[String, String] {
-  altsia_to_sexp_nodes(source).map(@sexp_html.render_html)
+  altsia_to_sexp_nodes(source).map(@sexp.render_html)
 }
 
 ///|

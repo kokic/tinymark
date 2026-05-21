@@ -1,6 +1,10 @@
 ///|
 test "renders paragraphs and inline sugar" {
-  let input = "Hello *world*.\nStill same paragraph.\n\nNext **one**."
+  let input = 
+    #|Hello *world*.
+    #|Still same paragraph.
+    #|
+    #|Next **one**.
   let expected = "<p>Hello <em>world</em>.Still same paragraph.</p><p>Next <strong>one</strong>.</p>"
   @test.assert_eq(altsia_to_html(input), Ok(expected))
 }
