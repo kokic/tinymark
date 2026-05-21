@@ -1,2 +1,4 @@
 import {
+  "moonbitlang/core/test",
+  "kokic/sexp-html" @sexp_html,
 }

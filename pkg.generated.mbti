@@ -1,0 +1,39 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "kokic/tinymark"
+
+import {
+  "kokic/sexp-html",
+}
+
+// Values
+pub fn altsia_to_html(String) -> Result[String, String]
+
+pub fn altsia_to_sexp_nodes(String) -> Result[Array[@sexp-html.SexpNode], String]
+
+pub fn parse_altsia(String) -> Result[Array[Node], String]
+
+// Errors
+
+// Types and methods
+pub(all) enum Node {
+  Text(String)
+  TextInterp(String)
+  Element(String, Array[(String, Value?)], Array[Node])
+  Ref(String)
+  Def(String, Value)
+  Meta(Array[(String, Value?)])
+  When(String, Array[Node])
+  Unless(String, Array[Node])
+}
+
+pub(all) enum Value {
+  Scalar(String)
+  Bool(Bool)
+  Fragment(Array[Node])
+  Interp(String)
+}
+
+// Type aliases
+
+// Traits
+
