@@ -47,7 +47,13 @@ test "list sugar and block quote code" {
 ///|
 test "html document uses altsia meta and explicit html head" {
   let input =
-    #|(meta (:title "Doc" :lang `zh` :charset `utf-8` :viewport `width=device-width` :description "Desc" :author "Ada"))
+    #|(meta 
+    #|  ( :title "Doc" 
+    #|    :lang `zh` 
+    #|    :charset `utf-8` 
+    #|    :viewport `width=device-width` 
+    #|    :description "Desc" 
+    #|    :author "Ada"))
     #|(html.head
     #|  (link (:rel `stylesheet` :href `/style.css`))
     #|  (script (:type `module` :src `/main.js`)))
