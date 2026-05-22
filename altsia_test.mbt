@@ -68,14 +68,42 @@ test "html document uses altsia meta and explicit html head" {
 test "html document uses backend defaults" {
   let input = "(meta (:title \"Doc\"))Body"
   let expected = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>Doc</title></head><body><p>Body</p></body></html>"
-  @test.assert_eq(altsia_to_html_document(input), Ok(expected))
+  @test.assert_eq(
+    altsia_to_html_document(input, options={
+      doctype: Some("html"),
+      charset: Some("utf-8"),
+      viewport: Some("width=device-width, initial-scale=1"),
+      enable_katex: false,
+    }),
+    Ok(expected),
+  )
 }
 
 ///|
 test "html meta overrides backend defaults" {
   let input = "(meta (:charset `shift_jis` :viewport `custom`))Body"
   let expected = "<!DOCTYPE html><html><head><meta charset=\"shift_jis\"><meta name=\"viewport\" content=\"custom\"></head><body><p>Body</p></body></html>"
-  @test.assert_eq(altsia_to_html_document(input), Ok(expected))
+  @test.assert_eq(
+    altsia_to_html_document(input, options={
+      doctype: Some("html"),
+      charset: Some("utf-8"),
+      viewport: Some("width=device-width, initial-scale=1"),
+      enable_katex: false,
+    }),
+    Ok(expected),
+  )
+}
+
+///|
+test "html document appends katex imports when enabled" {
+  let input = "(meta (:title \"Math\"))$x$"
+  @test.assert_eq(
+    altsia_to_html_document(input).map(html => {
+      html.contains("katex.min.css") &&
+      html.contains("renderMathInElement(document.body")
+    }),
+    Ok(true),
+  )
 }
 
 ///|

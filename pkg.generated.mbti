@@ -12,6 +12,8 @@ pub fn altsia_to_html_document(String, options? : HtmlDocumentOptions) -> Result
 
 pub fn altsia_to_sexp_nodes(String) -> Result[Array[@sexp-html.SexpNode], String]
 
+pub fn html_import_katex() -> String
+
 pub fn parse_altsia(String) -> Result[Array[Node], String]
 
 // Errors
@@ -21,6 +23,7 @@ pub(all) struct HtmlDocumentOptions {
   doctype : String?
   charset : String?
   viewport : String?
+  enable_katex : Bool
 }
 pub fn HtmlDocumentOptions::default() -> Self
 pub fn HtmlDocumentOptions::empty() -> Self
