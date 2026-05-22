@@ -41,7 +41,7 @@ contexts:
       scope: markup.list.numbered.altsia
 
   special-form:
-    - match: '(\()(\s*)(def|meta|when|unless)(?=\s|\))'
+    - match: '(\()(\s*)(def|meta|html\.head|when|unless)(?=\s|\))'
       captures:
         1: punctuation.section.expression.begin.altsia
         3: keyword.control.altsia

@@ -3,6 +3,13 @@ fn main {
   let cmd = @argparse.Command(
     "tinymark",
     about="Compile an .alt file to HTML.",
+    flags=[
+      @argparse.FlagArg(
+        "document",
+        long="document",
+        about="Emit a complete HTML document instead of a body fragment.",
+      ),
+    ],
     positionals=[
       @argparse.PositionArg(
         "input",
@@ -11,9 +18,7 @@ fn main {
       ),
     ],
   )
-  let matches = try {
-    cmd.parse()
-  } catch {
+  let matches = cmd.parse() catch {
     err => {
       println(err)
       return
@@ -31,14 +36,24 @@ fn main {
     return
   }
   let output_path = input_path.unsafe_substring(
-    start=0,
-    end=input_path.length() - 4,
-  ) + ".html"
+      start=0,
+      end=input_path.length() - 4,
+    ) +
+    ".html"
   let source = match read_input(input_path) {
     Some(value) => value
     None => return
   }
-  let html = match altsia_to_html(source) {
+  let document = match matches.flags.get("document") {
+    Some(true) => true
+    _ => false
+  }
+  let compiled = if document {
+    altsia_to_html_document(source)
+  } else {
+    altsia_to_html(source)
+  }
+  let html = match compiled {
     Ok(value) => value
     Err(error) => {
       println("compile error: \{error}")

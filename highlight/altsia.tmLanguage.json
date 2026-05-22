@@ -85,7 +85,7 @@
       "patterns": [
         {
           "name": "meta.expression.special.altsia",
-          "begin": "(\\()(\\s*)(def|meta|when|unless)(?=\\s|\\))",
+          "begin": "(\\()(\\s*)(def|meta|html\\.head|when|unless)(?=\\s|\\))",
           "beginCaptures": {
             "1": {
               "name": "punctuation.section.expression.begin.altsia"

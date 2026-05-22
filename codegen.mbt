@@ -18,9 +18,177 @@ pub fn altsia_to_html(source : String) -> Result[String, String] {
 }
 
 ///|
+pub fn altsia_to_html_document(source : String) -> Result[String, String] {
+  parse_altsia(source).bind(compile_html_document)
+}
+
+///|
 fn compile_document(nodes : Array[Node]) -> Result[Array[HtmlNode], String] {
   let env : Array[Binding] = []
-  compile_node_sequence(nodes, env, 1, true)
+  compile_node_sequence(nodes, env, 1, true, true)
+}
+
+///|
+fn compile_html_document(nodes : Array[Node]) -> Result[String, String] {
+  let env : Array[Binding] = []
+  let meta_attrs : Array[(String, Value?)] = []
+  let explicit_head : Array[HtmlNode] = []
+  let body : Array[HtmlNode] = []
+  let inline_run : Array[HtmlNode] = []
+  for node in nodes {
+    match node {
+      Def(name, value) => bind_value(env, name, value)
+      Meta(attrs) =>
+        for attr in attrs {
+          meta_attrs.push(attr)
+          match attr {
+            (name, Some(value)) => bind_value(env, name, value)
+            (_, None) => ()
+          }
+        }
+      HtmlHead(_, children) =>
+        match compile_node_sequence(children, env, 1, false, false) {
+          Err(error) => return Err(error)
+          Ok(compiled) =>
+            for child in compiled {
+              explicit_head.push(child)
+            }
+        }
+      _ =>
+        match compile_node(node, env, 1, false) {
+          Err(error) => return Err(error)
+          Ok(compiled) =>
+            for html_node in compiled {
+              if is_inline_html_node(html_node) {
+                append_with_paragraph_splits(inline_run, body, html_node)
+              } else {
+                flush_paragraph(inline_run, body)
+                body.push(html_node)
+              }
+            }
+        }
+    }
+  }
+  flush_paragraph(inline_run, body)
+  let html_attrs = match html_document_attrs(meta_attrs, env) {
+    Ok(value) => value
+    Err(error) => return Err(error)
+  }
+  let head = match html_head_nodes(meta_attrs, explicit_head, env) {
+    Ok(value) => value
+    Err(error) => return Err(error)
+  }
+  let document = HtmlNode::Element("html", html_attrs, [
+    HtmlNode::Element("head", [], head),
+    HtmlNode::Element("body", [], body),
+  ])
+  Ok("<!DOCTYPE html>" + @sexp.render_html([document]))
+}
+
+///|
+fn html_document_attrs(
+  meta_attrs : Array[(String, Value?)],
+  env : Array[Binding],
+) -> Result[Array[(String, String?)], String] {
+  let attrs : Array[(String, String?)] = []
+  for attr in meta_attrs {
+    match attr {
+      ("lang", Some(value)) =>
+        match value_to_scalar(value, env) {
+          Ok(text) => set_attr(attrs, "lang", Some(text))
+          Err(error) => return Err(error)
+        }
+      _ => ()
+    }
+  }
+  Ok(attrs)
+}
+
+///|
+fn html_head_nodes(
+  meta_attrs : Array[(String, Value?)],
+  explicit_head : Array[HtmlNode],
+  env : Array[Binding],
+) -> Result[Array[HtmlNode], String] {
+  let head : Array[HtmlNode] = []
+  match meta_scalar(meta_attrs, "charset", env) {
+    Ok(Some(text)) =>
+      head.push(HtmlNode::Element("meta", [("charset", Some(text))], []))
+    Ok(None) => ()
+    Err(error) => return Err(error)
+  }
+  match meta_scalar(meta_attrs, "viewport", env) {
+    Ok(Some(text)) => head.push(html_named_meta("viewport", text))
+    Ok(None) => ()
+    Err(error) => return Err(error)
+  }
+  match meta_scalar(meta_attrs, "title", env) {
+    Ok(Some(text)) =>
+      head.push(HtmlNode::Element("title", [], [HtmlNode::Text(text)]))
+    Ok(None) => ()
+    Err(error) => return Err(error)
+  }
+  match meta_scalar(meta_attrs, "description", env) {
+    Ok(Some(text)) => head.push(html_named_meta("description", text))
+    Ok(None) => ()
+    Err(error) => return Err(error)
+  }
+  match meta_scalar(meta_attrs, "author", env) {
+    Ok(Some(text)) => head.push(html_named_meta("author", text))
+    Ok(None) => ()
+    Err(error) => return Err(error)
+  }
+  for node in explicit_head {
+    head.push(node)
+  }
+  Ok(head)
+}
+
+///|
+fn meta_scalar(
+  meta_attrs : Array[(String, Value?)],
+  key : String,
+  env : Array[Binding],
+) -> Result[String?, String] {
+  let mut found : String? = None
+  for attr in meta_attrs {
+    match attr {
+      (name, Some(value)) if name == key =>
+        match value_to_scalar(value, env) {
+          Ok(text) => found = Some(text)
+          Err(error) => return Err(error)
+        }
+      _ => ()
+    }
+  }
+  Ok(found)
+}
+
+///|
+fn html_named_meta(name : String, content : String) -> HtmlNode {
+  HtmlNode::Element(
+    "meta",
+    [("name", Some(name)), ("content", Some(content))],
+    [],
+  )
+}
+
+///|
+fn set_attr(
+  attrs : Array[(String, String?)],
+  name : String,
+  value : String?,
+) -> Unit {
+  for i in 0..<attrs.length() {
+    match attrs[i] {
+      (existing, _) if existing == name => {
+        attrs[i] = (name, value)
+        return
+      }
+      _ => ()
+    }
+  }
+  attrs.push((name, value))
 }
 
 ///|
@@ -29,6 +197,7 @@ fn compile_node_sequence(
   env : Array[Binding],
   heading_level : Int,
   wrap_paragraphs : Bool,
+  allow_html_head : Bool,
 ) -> Result[Array[HtmlNode], String] {
   let out : Array[HtmlNode] = []
   let inline_run : Array[HtmlNode] = []
@@ -43,8 +212,9 @@ fn compile_node_sequence(
             (_, None) => ()
           }
         }
+      HtmlHead(_, _) if allow_html_head => ()
       _ =>
-        match compile_node(node, local_env, heading_level) {
+        match compile_node(node, local_env, heading_level, false) {
           Err(error) => return Err(error)
           Ok(compiled) =>
             for html_node in compiled {
@@ -67,6 +237,7 @@ fn compile_node(
   node : Node,
   env : Array[Binding],
   heading_level : Int,
+  allow_html_head : Bool,
 ) -> Result[Array[HtmlNode], String] {
   match node {
     Text(text) => Ok([HtmlNode::Text(text)])
@@ -79,16 +250,24 @@ fn compile_node(
       }
     Element(tag, attrs, children) =>
       compile_element(tag, attrs, children, env, heading_level)
+    HtmlHead(_, _) =>
+      if allow_html_head {
+        Ok([])
+      } else {
+        Err("html.head is only allowed at document top level")
+      }
     When(name, children) =>
       match bool_binding(env, name) {
-        Ok(true) => compile_node_sequence(children, env, heading_level, false)
+        Ok(true) =>
+          compile_node_sequence(children, env, heading_level, false, false)
         Ok(false) => Ok([])
         Err(error) => Err(error)
       }
     Unless(name, children) =>
       match bool_binding(env, name) {
         Ok(true) => Ok([])
-        Ok(false) => compile_node_sequence(children, env, heading_level, false)
+        Ok(false) =>
+          compile_node_sequence(children, env, heading_level, false, false)
         Err(error) => Err(error)
       }
     Def(_, _) | Meta(_) => Ok([])
@@ -125,7 +304,7 @@ fn compile_mapped_element(
   heading_level : Int,
 ) -> Result[Array[HtmlNode], String] {
   compile_attrs(attrs, env).bind(fn(html_attrs) {
-    compile_node_sequence(children, env, heading_level, false).map(fn(
+    compile_node_sequence(children, env, heading_level, false, false).map(fn(
       html_children,
     ) {
       [HtmlNode::Element(tag, html_attrs, html_children)]
@@ -167,7 +346,7 @@ fn compile_section(
     None => ()
   }
   let compiled = match
-    compile_node_sequence(children, env, heading_level + 1, true) {
+    compile_node_sequence(children, env, heading_level + 1, true, false) {
     Ok(nodes) => nodes
     Err(error) => return Err(error)
   }
@@ -191,7 +370,7 @@ fn compile_admonition(
   }
   append_class(html_attrs, kind)
   let html_children = match
-    compile_node_sequence(children, env, heading_level, true) {
+    compile_node_sequence(children, env, heading_level, true, false) {
     Ok(value) => value
     Err(error) => return Err(error)
   }
@@ -256,7 +435,8 @@ fn plain_text(
   env : Array[Binding],
   heading_level : Int,
 ) -> Result[String, String] {
-  let nodes = match compile_node_sequence(children, env, heading_level, false) {
+  let nodes = match
+    compile_node_sequence(children, env, heading_level, false, false) {
     Ok(value) => value
     Err(error) => return Err(error)
   }
@@ -323,7 +503,8 @@ fn value_to_nodes(
     Bool(value) => Ok([HtmlNode::Text(if value { "true" } else { "false" })])
     Interp(template) =>
       interpolate(template, env).map(fn(text) { [HtmlNode::Text(text)] })
-    Fragment(nodes) => compile_node_sequence(nodes, env, heading_level, false)
+    Fragment(nodes) =>
+      compile_node_sequence(nodes, env, heading_level, false, false)
   }
 }
 

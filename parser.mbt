@@ -106,6 +106,7 @@ fn parse_list(open : Cursor) -> Result[(Node, Cursor), String] {
   match head {
     "def" => parse_def(after_head)
     "meta" => parse_meta(after_head)
+    "html.head" => parse_html_head(after_head)
     "when" => parse_conditional(after_head, true)
     "unless" => parse_conditional(after_head, false)
     _ => parse_element_or_ref(head, after_head)
@@ -176,6 +177,27 @@ fn parse_meta(after_head : Cursor) -> Result[(Node, Cursor), String] {
         }
       })
     _ => Err(cursor.error("meta requires an attribute list"))
+  }
+}
+
+///|
+fn parse_html_head(after_head : Cursor) -> Result[(Node, Cursor), String] {
+  let mut cursor = after_head.skip_layout()
+  let attrs : Array[(String, Value?)] = []
+  if cursor.peek() == Some('(') && peek_attr_list(cursor) {
+    match parse_attr_list(cursor) {
+      Ok((parsed_attrs, next)) => {
+        for attr in parsed_attrs {
+          attrs.push(attr)
+        }
+        cursor = next.skip_layout()
+      }
+      Err(error) => return Err(error)
+    }
+  }
+  match parse_nodes(cursor, Some(')')) {
+    Err(error) => Err(error)
+    Ok((children, next)) => Ok((Node::HtmlHead(attrs, children), next))
   }
 }
 

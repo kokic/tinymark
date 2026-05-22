@@ -11,6 +11,7 @@ pub(all) enum Node {
   Text(String)
   TextInterp(String)
   Element(String, Array[(String, Value?)], Array[Node])
+  HtmlHead(Array[(String, Value?)], Array[Node])
   Ref(String)
   Def(String, Value)
   Meta(Array[(String, Value?)])

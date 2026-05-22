@@ -8,6 +8,8 @@ import {
 // Values
 pub fn altsia_to_html(String) -> Result[String, String]
 
+pub fn altsia_to_html_document(String) -> Result[String, String]
+
 pub fn altsia_to_sexp_nodes(String) -> Result[Array[@sexp-html.SexpNode], String]
 
 pub fn parse_altsia(String) -> Result[Array[Node], String]
@@ -19,6 +21,7 @@ pub(all) enum Node {
   Text(String)
   TextInterp(String)
   Element(String, Array[(String, Value?)], Array[Node])
+  HtmlHead(Array[(String, Value?)], Array[Node])
   Ref(String)
   Def(String, Value)
   Meta(Array[(String, Value?)])
