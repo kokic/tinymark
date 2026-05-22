@@ -103,10 +103,66 @@ fn compile_html_document(
     HtmlNode::Element("head", [], head),
     HtmlNode::Element("body", [], body),
   ])
-  Ok(
-    render_doctype(options.doctype) +
-    @sexp.render_html_with([document], render_custom_node),
+  Ok(render_html_document(document, options.doctype))
+}
+
+///|
+fn render_html_document(document : HtmlNode, doctype : String?) -> String {
+  match document {
+    HtmlNode::Element(
+      "html",
+      attrs,
+      [HtmlNode::Element("head", _, head), HtmlNode::Element("body", _, body)]
+    ) => {
+      let lines : Array[String] = []
+      match doctype {
+        Some(value) => lines.push("<!DOCTYPE \{value}>")
+        None => ()
+      }
+      lines.push(render_open_tag("html", attrs))
+      lines.push("  <head>")
+      push_rendered_lines(lines, head, "    ")
+      lines.push("  </head>")
+      lines.push("  <body>")
+      push_rendered_lines(lines, body, "    ")
+      lines.push("  </body>")
+      lines.push("</html>")
+      lines.join("\n")
+    }
+    _ =>
+      render_doctype(doctype) +
+      @sexp.render_html_with([document], render_custom_node)
+  }
+}
+
+///|
+fn push_rendered_lines(
+  lines : Array[String],
+  nodes : Array[HtmlNode],
+  indent : String,
+) -> Unit {
+  for node in nodes {
+    let rendered = @sexp.render_html_with([node], render_custom_node)
+    for line in rendered.split("\n") {
+      if line.length() > 0 {
+        lines.push(indent + line.to_owned())
+      }
+    }
+  }
+}
+
+///|
+fn render_open_tag(tag : String, attrs : Array[(String, String?)]) -> String {
+  let rendered = @sexp.render_html_with(
+    [HtmlNode::Element(tag, attrs, [])],
+    render_custom_node,
   )
+  let suffix = "</" + tag + ">"
+  if rendered.has_suffix(suffix) {
+    rendered.unsafe_substring(start=0, end=rendered.length() - suffix.length())
+  } else {
+    rendered
+  }
 }
 
 ///|

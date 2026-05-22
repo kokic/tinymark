@@ -1,8 +1,7 @@
 import {
-  "moonbitlang/core/test",
+  "kokic/tinymark/core",
   "moonbitlang/core/argparse",
   "moonbitlang/x/fs",
-  "kokic/sexp-html" @sexp,
 }
 
 options(

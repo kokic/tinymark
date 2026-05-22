@@ -3,13 +3,6 @@ fn main {
   let cmd = @argparse.Command(
     "tinymark",
     about="Compile an .alt file to HTML.",
-    flags=[
-      @argparse.FlagArg(
-        "document",
-        long="document",
-        about="Emit a complete HTML document instead of a body fragment.",
-      ),
-    ],
     positionals=[
       @argparse.PositionArg(
         "input",
@@ -44,15 +37,7 @@ fn main {
     Some(value) => value
     None => return
   }
-  let document = match matches.flags.get("document") {
-    Some(true) => true
-    _ => false
-  }
-  let compiled = if document {
-    altsia_to_html_document(source)
-  } else {
-    altsia_to_html(source)
-  }
+  let compiled = @core.altsia_to_html_document(source)
   let html = match compiled {
     Ok(value) => value
     Err(error) => {
