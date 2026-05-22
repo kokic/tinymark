@@ -61,7 +61,7 @@ fn main {
     }
   }
   if write_output(output_path, html) {
-    println("wrote \{output_path}")
+    println("output: \{output_path}")
   }
 }
 
