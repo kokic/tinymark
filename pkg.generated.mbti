@@ -8,7 +8,7 @@ import {
 // Values
 pub fn altsia_to_html(String) -> Result[String, String]
 
-pub fn altsia_to_html_document(String) -> Result[String, String]
+pub fn altsia_to_html_document(String, options? : HtmlDocumentOptions) -> Result[String, String]
 
 pub fn altsia_to_sexp_nodes(String) -> Result[Array[@sexp-html.SexpNode], String]
 
@@ -17,6 +17,14 @@ pub fn parse_altsia(String) -> Result[Array[Node], String]
 // Errors
 
 // Types and methods
+pub(all) struct HtmlDocumentOptions {
+  doctype : String?
+  charset : String?
+  viewport : String?
+}
+pub fn HtmlDocumentOptions::default() -> Self
+pub fn HtmlDocumentOptions::empty() -> Self
+
 pub(all) enum Node {
   Text(String)
   TextInterp(String)

@@ -8,6 +8,27 @@ priv struct Binding {
 }
 
 ///|
+pub(all) struct HtmlDocumentOptions {
+  doctype : String?
+  charset : String?
+  viewport : String?
+}
+
+///|
+pub fn HtmlDocumentOptions::default() -> HtmlDocumentOptions {
+  {
+    doctype: Some("html"),
+    charset: Some("utf-8"),
+    viewport: Some("width=device-width, initial-scale=1"),
+  }
+}
+
+///|
+pub fn HtmlDocumentOptions::empty() -> HtmlDocumentOptions {
+  { doctype: None, charset: None, viewport: None }
+}
+
+///|
 pub fn altsia_to_sexp_nodes(source : String) -> Result[Array[HtmlNode], String] {
   parse_altsia(source).bind(fn(nodes) { compile_document(nodes) })
 }
@@ -18,8 +39,17 @@ pub fn altsia_to_html(source : String) -> Result[String, String] {
 }
 
 ///|
-pub fn altsia_to_html_document(source : String) -> Result[String, String] {
-  parse_altsia(source).bind(compile_html_document)
+pub fn altsia_to_html_document(
+  source : String,
+  options? : HtmlDocumentOptions,
+) -> Result[String, String] {
+  let document_options = match options {
+    Some(value) => value
+    None => HtmlDocumentOptions::default()
+  }
+  parse_altsia(source).bind(fn(nodes) {
+    compile_html_document(nodes, document_options)
+  })
 }
 
 ///|
@@ -29,7 +59,10 @@ fn compile_document(nodes : Array[Node]) -> Result[Array[HtmlNode], String] {
 }
 
 ///|
-fn compile_html_document(nodes : Array[Node]) -> Result[String, String] {
+fn compile_html_document(
+  nodes : Array[Node],
+  options : HtmlDocumentOptions,
+) -> Result[String, String] {
   let env : Array[Binding] = []
   let meta_attrs : Array[(String, Value?)] = []
   let explicit_head : Array[HtmlNode] = []
@@ -74,7 +107,7 @@ fn compile_html_document(nodes : Array[Node]) -> Result[String, String] {
     Ok(value) => value
     Err(error) => return Err(error)
   }
-  let head = match html_head_nodes(meta_attrs, explicit_head, env) {
+  let head = match html_head_nodes(meta_attrs, explicit_head, env, options) {
     Ok(value) => value
     Err(error) => return Err(error)
   }
@@ -82,7 +115,7 @@ fn compile_html_document(nodes : Array[Node]) -> Result[String, String] {
     HtmlNode::Element("head", [], head),
     HtmlNode::Element("body", [], body),
   ])
-  Ok("<!DOCTYPE html>" + @sexp.render_html([document]))
+  Ok(render_doctype(options.doctype) + @sexp.render_html([document]))
 }
 
 ///|
@@ -109,15 +142,16 @@ fn html_head_nodes(
   meta_attrs : Array[(String, Value?)],
   explicit_head : Array[HtmlNode],
   env : Array[Binding],
+  options : HtmlDocumentOptions,
 ) -> Result[Array[HtmlNode], String] {
   let head : Array[HtmlNode] = []
-  match meta_scalar(meta_attrs, "charset", env) {
+  match meta_scalar_or_default(meta_attrs, "charset", options.charset, env) {
     Ok(Some(text)) =>
       head.push(HtmlNode::Element("meta", [("charset", Some(text))], []))
     Ok(None) => ()
     Err(error) => return Err(error)
   }
-  match meta_scalar(meta_attrs, "viewport", env) {
+  match meta_scalar_or_default(meta_attrs, "viewport", options.viewport, env) {
     Ok(Some(text)) => head.push(html_named_meta("viewport", text))
     Ok(None) => ()
     Err(error) => return Err(error)
@@ -145,6 +179,20 @@ fn html_head_nodes(
 }
 
 ///|
+fn meta_scalar_or_default(
+  meta_attrs : Array[(String, Value?)],
+  key : String,
+  default : String?,
+  env : Array[Binding],
+) -> Result[String?, String] {
+  match meta_scalar(meta_attrs, key, env) {
+    Ok(Some(text)) => Ok(Some(text))
+    Ok(None) => Ok(default)
+    Err(error) => Err(error)
+  }
+}
+
+///|
 fn meta_scalar(
   meta_attrs : Array[(String, Value?)],
   key : String,
@@ -162,6 +210,14 @@ fn meta_scalar(
     }
   }
   Ok(found)
+}
+
+///|
+fn render_doctype(doctype : String?) -> String {
+  match doctype {
+    Some(value) => "<!DOCTYPE " + value + ">"
+    None => ""
+  }
 }
 
 ///|

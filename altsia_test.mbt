@@ -50,8 +50,6 @@ test "html document uses altsia meta and explicit html head" {
     #|(meta 
     #|  ( :title "Doc" 
     #|    :lang `zh` 
-    #|    :charset `utf-8` 
-    #|    :viewport `width=device-width` 
     #|    :description "Desc" 
     #|    :author "Ada"))
     #|(html.head
@@ -59,7 +57,24 @@ test "html document uses altsia meta and explicit html head" {
     #|  (script (:type `module` :src `/main.js`)))
     #|
     #|Hello (title).
-  let expected = "<!DOCTYPE html><html lang=\"zh\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width\"><title>Doc</title><meta name=\"description\" content=\"Desc\"><meta name=\"author\" content=\"Ada\"><link rel=\"stylesheet\" href=\"/style.css\"><script type=\"module\" src=\"/main.js\"></script></head><body><p>Hello Doc.</p></body></html>"
+  let expected = "<html lang=\"zh\"><head><title>Doc</title><meta name=\"description\" content=\"Desc\"><meta name=\"author\" content=\"Ada\"><link rel=\"stylesheet\" href=\"/style.css\"><script type=\"module\" src=\"/main.js\"></script></head><body><p>Hello Doc.</p></body></html>"
+  @test.assert_eq(
+    altsia_to_html_document(input, options=HtmlDocumentOptions::empty()),
+    Ok(expected),
+  )
+}
+
+///|
+test "html document uses backend defaults" {
+  let input = "(meta (:title \"Doc\"))Body"
+  let expected = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>Doc</title></head><body><p>Body</p></body></html>"
+  @test.assert_eq(altsia_to_html_document(input), Ok(expected))
+}
+
+///|
+test "html meta overrides backend defaults" {
+  let input = "(meta (:charset `shift_jis` :viewport `custom`))Body"
+  let expected = "<!DOCTYPE html><html><head><meta charset=\"shift_jis\"><meta name=\"viewport\" content=\"custom\"></head><body><p>Body</p></body></html>"
   @test.assert_eq(altsia_to_html_document(input), Ok(expected))
 }
 
