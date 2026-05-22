@@ -32,7 +32,14 @@ test "section title and local condition" {
 
 ///|
 test "list sugar and block quote code" {
-  let input = "- one\n- two\n\n(code (:lang `js`))\n```\nconsole.log(1)\n```"
+  let input = 
+  #|- one
+  #|- two
+  #|
+  #|(code (:lang `js`))
+  #|```
+  #|console.log(1)
+  #|```
   let expected = "<ul><li>one</li><li>two</li></ul><pre><code class=\"lang-js\">console.log(1)\n</code></pre>"
   @test.assert_eq(altsia_to_html(input), Ok(expected))
 }
