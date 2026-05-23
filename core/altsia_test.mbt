@@ -31,6 +31,46 @@ test "section title and local condition" {
 }
 
 ///|
+test "mixed block keeps simple nested text unwrapped" {
+  let input =
+    #|(block
+    #|Nested line one
+    #|Nested line two)
+  let expected = "<div>Nested line oneNested line two</div>"
+  @test.assert_eq(altsia_to_html(input), Ok(expected))
+}
+
+///|
+test "mixed block wraps paragraphs only when needed" {
+  let input =
+    #|(block
+    #|First paragraph.
+    #|
+    #|Second paragraph.)
+  let expected = "<div><p>First paragraph.</p><p>Second paragraph.</p></div>"
+  @test.assert_eq(altsia_to_html(input), Ok(expected))
+}
+
+///|
+test "mixed block detects paragraph need through local refs" {
+  let input =
+    #|(block
+    #|  (def body `First.
+    #|
+    #|Second.`)
+    #|  (body))
+  let expected = "<div><p>First.</p><p>Second.</p></div>"
+  @test.assert_eq(altsia_to_html(input), Ok(expected))
+}
+
+///|
+test "structural nesting does not wrap table cells in paragraphs" {
+  let input = "(table (tbody (tr (td A) (td B))))"
+  let expected = "<table><tbody><tr><td>A</td><td>B</td></tr></tbody></table>"
+  @test.assert_eq(altsia_to_html(input), Ok(expected))
+}
+
+///|
 test "list sugar and block quote code" {
   let input =
     #|- one

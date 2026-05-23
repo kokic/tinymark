@@ -2,6 +2,13 @@
 type HtmlNode = @sexp.SexpNode
 
 ///|
+priv enum ContentModel {
+  InlineOnly
+  BlockFlow
+  MixedFlow
+}
+
+///|
 pub(all) struct HtmlDocumentOptions {
   doctype : String?
   charset : String?
@@ -374,6 +381,21 @@ fn compile_block_children(
 }
 
 ///|
+fn compile_mixed_children(
+  children : Array[Node],
+  env : Array[Binding],
+  heading_level : Int,
+) -> Result[Array[HtmlNode], String] {
+  compile_node_sequence(
+    children,
+    env,
+    heading_level,
+    children_need_paragraphs(children, env),
+    false,
+  )
+}
+
+///|
 fn compile_node(
   node : Node,
   env : Array[Binding],
@@ -426,6 +448,10 @@ fn compile_element(
     "list" => compile_mapped_element("ul", attrs, children, env, heading_level)
     "enum" => compile_mapped_element("ol", attrs, children, env, heading_level)
     "item" => compile_mapped_element("li", attrs, children, env, heading_level)
+    "fig" =>
+      compile_mapped_element("figure", attrs, children, env, heading_level)
+    "block" =>
+      compile_mapped_element("div", attrs, children, env, heading_level)
     "note" | "warning" | "tip" =>
       compile_admonition(tag, attrs, children, env, heading_level)
     "code" => compile_code(attrs, children, env, heading_level)
@@ -443,12 +469,103 @@ fn compile_mapped_element(
   heading_level : Int,
 ) -> Result[Array[HtmlNode], String] {
   compile_attrs(attrs, env).bind(fn(html_attrs) {
-    compile_inline_children(children, env, heading_level).map(fn(
+    compile_children_for_tag(tag, children, env, heading_level).map(fn(
       html_children,
     ) {
       [HtmlNode::Element(tag, html_attrs, html_children)]
     })
   })
+}
+
+///|
+fn compile_children_for_tag(
+  tag : String,
+  children : Array[Node],
+  env : Array[Binding],
+  heading_level : Int,
+) -> Result[Array[HtmlNode], String] {
+  match content_model(tag) {
+    InlineOnly => compile_inline_children(children, env, heading_level)
+    BlockFlow => compile_block_children(children, env, heading_level)
+    MixedFlow => compile_mixed_children(children, env, heading_level)
+  }
+}
+
+///|
+fn content_model(tag : String) -> ContentModel {
+  match tag {
+    "blockquote" => ContentModel::BlockFlow
+    "li" | "div" => ContentModel::MixedFlow
+    _ => ContentModel::InlineOnly
+  }
+}
+
+///|
+fn children_need_paragraphs(
+  children : Array[Node],
+  env : Array[Binding],
+) -> Bool {
+  let local_env = clone_env(env)
+  for child in children {
+    match child {
+      Def(name, value) => bind_value(local_env, name, value)
+      Meta(attrs) =>
+        for attr in attrs {
+          bind_meta_attr(local_env, attr)
+        }
+      _ => if node_needs_paragraph_context(child, local_env) { return true }
+    }
+  }
+  false
+}
+
+///|
+fn node_needs_paragraph_context(node : Node, env : Array[Binding]) -> Bool {
+  match node {
+    Text(text) => text.contains("\n\n")
+    TextInterp(text) => text.contains("\n\n")
+    Element(tag, _, _) => is_source_block_tag(tag)
+    Ref(name) =>
+      match lookup(env, name) {
+        Some(Scalar(text)) => text.contains("\n\n")
+        Some(Interp(text)) => text.contains("\n\n")
+        Some(Fragment(nodes)) => children_need_paragraphs(nodes, env)
+        _ => false
+      }
+    When(name, children) =>
+      match bool_binding(env, name) {
+        Ok(true) => children_need_paragraphs(children, env)
+        _ => false
+      }
+    Unless(name, children) =>
+      match bool_binding(env, name) {
+        Ok(false) => children_need_paragraphs(children, env)
+        _ => false
+      }
+    Def(_, _) | Meta(_) | HtmlHead(_, _) => false
+  }
+}
+
+///|
+fn is_source_block_tag(tag : String) -> Bool {
+  tag == "section" ||
+  tag == "list" ||
+  tag == "enum" ||
+  tag == "item" ||
+  tag == "table" ||
+  tag == "thead" ||
+  tag == "tbody" ||
+  tag == "tr" ||
+  tag == "fig" ||
+  tag == "note" ||
+  tag == "warning" ||
+  tag == "tip" ||
+  tag == "code" ||
+  tag == "slot" ||
+  tag == "p" ||
+  tag == "blockquote" ||
+  tag == "hr" ||
+  tag == "block"
 }
 
 ///|
@@ -831,6 +948,7 @@ fn is_block_tag(tag : String) -> Bool {
   tag == "figure" ||
   tag == "aside" ||
   tag == "pre" ||
+  tag == "div" ||
   tag == "p" ||
   tag == "blockquote" ||
   tag == "hr" ||
