@@ -454,7 +454,7 @@ fn compile_element(
       compile_mapped_element("div", attrs, children, env, heading_level)
     "note" | "warning" | "tip" =>
       compile_admonition(tag, attrs, children, env, heading_level)
-    "code" => compile_code(attrs, children, env, heading_level)
+    "codeblock" => compile_code(attrs, children, env, heading_level)
     "slot" => compile_slot(attrs, children, env, heading_level)
     _ => compile_mapped_element(tag, attrs, children, env, heading_level)
   }
@@ -560,7 +560,7 @@ fn is_source_block_tag(tag : String) -> Bool {
   tag == "note" ||
   tag == "warning" ||
   tag == "tip" ||
-  tag == "code" ||
+  tag == "codeblock" ||
   tag == "slot" ||
   tag == "p" ||
   tag == "blockquote" ||

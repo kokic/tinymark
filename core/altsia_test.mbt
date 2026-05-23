@@ -71,12 +71,19 @@ test "structural nesting does not wrap table cells in paragraphs" {
 }
 
 ///|
-test "list sugar and block quote code" {
+test "html code tag remains inline" {
+  let input = "Use (code cargo test)."
+  let expected = "<p>Use <code>cargo test</code>.</p>"
+  @test.assert_eq(altsia_to_html(input), Ok(expected))
+}
+
+///|
+test "list sugar and block quote codeblock" {
   let input =
     #|- one
     #|- two
     #|
-    #|(code (:lang `js`))
+    #|(codeblock (:lang `js`))
     #|```
     #|console.log(1)
     #|```
