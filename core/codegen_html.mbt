@@ -73,7 +73,8 @@ fn compile_html_document(
   let inline_run : Array[HtmlNode] = []
   for node in nodes {
     match node {
-      Def(name, value) => bind_value(env, name, value)
+      Let(name, value) => bind_value(env, name, value)
+      Def(name, params, body) => bind_template(env, name, params, body)
       Meta(attrs) =>
         for attr in attrs {
           meta_attrs.push(attr)
@@ -342,7 +343,8 @@ fn compile_node_sequence(
   let local_env = clone_env(env)
   for node in nodes {
     match node {
-      Def(name, value) => bind_value(local_env, name, value)
+      Let(name, value) => bind_value(local_env, name, value)
+      Def(name, params, body) => bind_template(local_env, name, params, body)
       Meta(attrs) =>
         for attr in attrs {
           bind_meta_attr(local_env, attr)
@@ -407,12 +409,21 @@ fn compile_node(
     TextInterp(text) =>
       interpolate(text, env).map(fn(value) { [HtmlNode::Text(value)] })
     Ref(name) =>
-      match lookup(env, name) {
+      match lookup_value(env, name) {
         Some(value) => value_to_nodes(value, env, heading_level)
-        None => Ok([HtmlNode::Element(name, [], [])])
+        None =>
+          match lookup_template(env, name) {
+            Some(template) =>
+              expand_template(template, [], [], env, heading_level)
+            None => Ok([HtmlNode::Element(name, [], [])])
+          }
       }
     Element(tag, attrs, children) =>
-      compile_element(tag, attrs, children, env, heading_level)
+      match lookup_template(env, tag) {
+        Some(template) =>
+          expand_template(template, attrs, children, env, heading_level)
+        None => compile_element(tag, attrs, children, env, heading_level)
+      }
     HtmlHead(_, _) =>
       if allow_html_head {
         Ok([])
@@ -431,7 +442,7 @@ fn compile_node(
         Ok(false) => compile_inline_children(children, env, heading_level)
         Err(error) => Err(error)
       }
-    Def(_, _) | Meta(_) => Ok([])
+    Let(_, _) | Def(_, _, _) | Meta(_) => Ok([])
   }
 }
 
@@ -508,7 +519,8 @@ fn children_need_paragraphs(
   let local_env = clone_env(env)
   for child in children {
     match child {
-      Def(name, value) => bind_value(local_env, name, value)
+      Let(name, value) => bind_value(local_env, name, value)
+      Def(name, params, body) => bind_template(local_env, name, params, body)
       Meta(attrs) =>
         for attr in attrs {
           bind_meta_attr(local_env, attr)
@@ -526,7 +538,7 @@ fn node_needs_paragraph_context(node : Node, env : Array[Binding]) -> Bool {
     TextInterp(text) => text.contains("\n\n")
     Element(tag, _, _) => is_source_block_tag(tag)
     Ref(name) =>
-      match lookup(env, name) {
+      match lookup_value(env, name) {
         Some(Scalar(text)) => text.contains("\n\n")
         Some(Interp(text)) => text.contains("\n\n")
         Some(Fragment(nodes)) => children_need_paragraphs(nodes, env)
@@ -542,7 +554,7 @@ fn node_needs_paragraph_context(node : Node, env : Array[Binding]) -> Bool {
         Ok(false) => children_need_paragraphs(children, env)
         _ => false
       }
-    Def(_, _) | Meta(_) | HtmlHead(_, _) => false
+    Let(_, _) | Def(_, _, _) | Meta(_) | HtmlHead(_, _) => false
   }
 }
 
@@ -684,6 +696,107 @@ fn compile_slot(
 }
 
 ///|
+fn expand_template(
+  template : Template,
+  attrs : Array[(String, Value?)],
+  children : Array[Node],
+  call_env : Array[Binding],
+  heading_level : Int,
+) -> Result[Array[HtmlNode], String] {
+  let values : Array[Value?] = []
+  for _ in template.params {
+    values.push(None)
+  }
+  for attr in attrs {
+    match attr {
+      (name, None) => return Err("template argument requires a value: " + name)
+      (name, Some(value)) =>
+        match param_index(template.params, name) {
+          Some(index) =>
+            match values[index] {
+              Some(_) => return Err("duplicate template argument: " + name)
+              None => values[index] = Some(value)
+            }
+          None => return Err("unknown template argument: " + name)
+        }
+    }
+  }
+  let positional_args = positional_values(children)
+  let mut next_param = 0
+  for arg in positional_args {
+    let mut found_slot = false
+    while next_param < values.length() && !found_slot {
+      match values[next_param] {
+        Some(_) => next_param += 1
+        None => found_slot = true
+      }
+    }
+    if next_param >= values.length() {
+      return Err("too many template arguments")
+    }
+    values[next_param] = Some(arg)
+    next_param += 1
+  }
+  let template_env = clone_env(call_env)
+  append_bindings(template_env, template.env)
+  for index in 0..<template.params.length() {
+    match values[index] {
+      Some(value) => bind_value(template_env, template.params[index], value)
+      None => return Err("missing template argument: " + template.params[index])
+    }
+  }
+  compile_inline_children(template.body, template_env, heading_level)
+}
+
+///|
+fn positional_values(children : Array[Node]) -> Array[Value] {
+  let values : Array[Value] = []
+  for child in children {
+    match child {
+      Text(text) => append_text_args(values, text)
+      TextInterp(text) => values.push(Value::Interp(text))
+      _ => values.push(nodes_to_value([child]))
+    }
+  }
+  values
+}
+
+///|
+fn append_text_args(values : Array[Value], text : String) -> Unit {
+  let chars = text.to_array()
+  let mut index = 0
+  while index < chars.length() {
+    while index < chars.length() && is_arg_space(chars[index]) {
+      index += 1
+    }
+    let start = index
+    while index < chars.length() && !is_arg_space(chars[index]) {
+      index += 1
+    }
+    if index > start {
+      values.push(
+        Value::Scalar(String::from_array(chars.view(start~, end=index))),
+      )
+    }
+  }
+}
+
+///|
+fn is_arg_space(ch : Char) -> Bool {
+  ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n'
+}
+
+///|
+fn param_index(params : Array[String], name : String) -> Int? {
+  for index in 0..<params.length() {
+    if params[index] == name {
+      return Some(index)
+    }
+  }
+  None
+}
+
+///|
 fn plain_text(
   children : Array[Node],
   env : Array[Binding],
@@ -778,7 +891,7 @@ fn interpolate(
         return Err("unterminated interpolation")
       }
       let name = String::from_array(chars.view(start=index + 1, end~))
-      match lookup(env, name) {
+      match lookup_value(env, name) {
         Some(value) =>
           match value_to_scalar(value, env) {
             Ok(text) => parts.push(text)
@@ -800,7 +913,7 @@ fn interpolate(
 
 ///|
 fn bool_binding(env : Array[Binding], name : String) -> Result[Bool, String] {
-  match lookup(env, name) {
+  match lookup_value(env, name) {
     Some(Bool(value)) => Ok(value)
     Some(Scalar("true")) => Ok(true)
     Some(Scalar("false")) => Ok(false)
@@ -810,13 +923,16 @@ fn bool_binding(env : Array[Binding], name : String) -> Result[Bool, String] {
 }
 
 ///|
-fn lookup(env : Array[Binding], name : String) -> Value? {
+fn lookup_value(env : Array[Binding], name : String) -> Value? {
   let mut index = env.length()
   while index > 0 {
     index -= 1
     let binding = env[index]
     if binding.name == name {
-      return Some(binding.value)
+      match binding.value {
+        BoundValue(value) => return Some(value)
+        _ => ()
+      }
     }
   }
   None
@@ -824,7 +940,36 @@ fn lookup(env : Array[Binding], name : String) -> Value? {
 
 ///|
 fn bind_value(env : Array[Binding], name : String, value : Value) -> Unit {
-  env.push({ name, value })
+  env.push({ name, value: BindingValue::BoundValue(value) })
+}
+
+///|
+fn lookup_template(env : Array[Binding], name : String) -> Template? {
+  let mut index = env.length()
+  while index > 0 {
+    index -= 1
+    let binding = env[index]
+    if binding.name == name {
+      match binding.value {
+        BoundTemplate(template) => return Some(template)
+        _ => ()
+      }
+    }
+  }
+  None
+}
+
+///|
+fn bind_template(
+  env : Array[Binding],
+  name : String,
+  params : Array[String],
+  body : Array[Node],
+) -> Unit {
+  env.push({
+    name,
+    value: BindingValue::BoundTemplate({ params, body, env: clone_env(env) }),
+  })
 }
 
 ///|
@@ -842,6 +987,13 @@ fn clone_env(env : Array[Binding]) -> Array[Binding] {
     cloned.push(binding)
   }
   cloned
+}
+
+///|
+fn append_bindings(out : Array[Binding], bindings : Array[Binding]) -> Unit {
+  for binding in bindings {
+    out.push(binding)
+  }
 }
 
 ///|

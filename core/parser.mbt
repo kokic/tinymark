@@ -105,6 +105,7 @@ fn parse_list(open : Cursor) -> Result[(Node, Cursor), String] {
   }
   match head {
     "def" => parse_def(after_head)
+    "let" => parse_let(after_head)
     "meta" => parse_meta(after_head)
     "html.head" => parse_html_head(after_head)
     "when" => parse_conditional(after_head, true)
@@ -120,6 +121,38 @@ fn parse_def(after_head : Cursor) -> Result[(Node, Cursor), String] {
   if name.is_empty() {
     return Err(name_start.error("def name cannot be empty"))
   }
+  let params_start = after_name.skip_layout()
+  if params_start.peek() != Some('(') {
+    return Err(params_start.error("def requires a parameter list"))
+  }
+  let (params, after_params) = match parse_param_list(params_start) {
+    Ok(value) => value
+    Err(error) => return Err(error)
+  }
+  let body : Array[Node] = []
+  let mut cursor = after_params.skip_layout()
+  while !cursor.is_end() && cursor.peek() != Some(')') {
+    match parse_node(cursor) {
+      Err(error) => return Err(error)
+      Ok((node, next)) => {
+        body.push(node)
+        cursor = next.skip_layout()
+      }
+    }
+  }
+  if cursor.peek() != Some(')') {
+    return Err(after_head.error("unterminated def"))
+  }
+  Ok((Node::Def(name, params, body), cursor.advance(1)))
+}
+
+///|
+fn parse_let(after_head : Cursor) -> Result[(Node, Cursor), String] {
+  let name_start = after_head.skip_layout()
+  let (name, after_name) = parse_name(name_start)
+  if name.is_empty() {
+    return Err(name_start.error("let name cannot be empty"))
+  }
   let values : Array[Node] = []
   let mut cursor = after_name.skip_layout()
   while !cursor.is_end() && cursor.peek() != Some(')') {
@@ -132,10 +165,42 @@ fn parse_def(after_head : Cursor) -> Result[(Node, Cursor), String] {
     }
   }
   if cursor.peek() != Some(')') {
-    return Err(after_head.error("unterminated def"))
+    return Err(after_head.error("unterminated let"))
   }
   let value = nodes_to_value(values)
-  Ok((Node::Def(name, value), cursor.advance(1)))
+  Ok((Node::Let(name, value), cursor.advance(1)))
+}
+
+///|
+fn parse_param_list(open : Cursor) -> Result[(Array[String], Cursor), String] {
+  let params : Array[String] = []
+  let mut cursor = open.advance(1).skip_layout()
+  while !cursor.is_end() && cursor.peek() != Some(')') {
+    let (name, next) = parse_name(cursor)
+    if name.is_empty() {
+      return Err(cursor.error("parameter name cannot be empty"))
+    }
+    if contains_string(params, name) {
+      return Err(cursor.error("duplicate parameter name: " + name))
+    }
+    params.push(name)
+    cursor = next.skip_layout()
+  }
+  if cursor.peek() != Some(')') {
+    Err(open.error("unterminated parameter list"))
+  } else {
+    Ok((params, cursor.advance(1)))
+  }
+}
+
+///|
+fn contains_string(items : Array[String], target : String) -> Bool {
+  for item in items {
+    if item == target {
+      return true
+    }
+  }
+  false
 }
 
 ///|
