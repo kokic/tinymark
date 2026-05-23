@@ -10,6 +10,13 @@ test "renders paragraphs and inline sugar" {
 }
 
 ///|
+test "preserves spaces around inline sexp" {
+  let input = "Open (span your) eyes."
+  let expected = "<p>Open <span>your</span> eyes.</p>"
+  @test.assert_eq(altsia_to_html(input), Ok(expected))
+}
+
+///|
 test "def references and interpolated attributes" {
   let input = "(let lang `zh`)(let base `/docs`)(p (:class \"doc-(lang)\") (a (:href \"(base)/intro\") \"语言：(lang)\"))"
   let expected = "<p class=\"doc-zh\"><a href=\"/docs/intro\">语言：zh</a></p>"
@@ -68,7 +75,7 @@ test "template supports positional and named arguments" {
   let input =
     #|(def reorder (x y z) (p (z) (y) (x)))
     #|(reorder (:y `Y`) X Z)
-  let expected = "<p>ZYX</p>"
+  let expected = "<p>Z Y X</p>"
   @test.assert_eq(altsia_to_html(input), Ok(expected))
 }
 
@@ -124,7 +131,7 @@ test "template reports argument errors" {
 ///|
 test "structural nesting does not wrap table cells in paragraphs" {
   let input = "(table (tbody (tr (td A) (td B))))"
-  let expected = "<table><tbody><tr><td>A</td><td>B</td></tr></tbody></table>"
+  let expected = "<table><tbody><tr><td>A</td> <td>B</td></tr></tbody></table>"
   @test.assert_eq(altsia_to_html(input), Ok(expected))
 }
 

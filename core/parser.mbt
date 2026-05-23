@@ -41,7 +41,7 @@ fn parse_nodes(
   close : Char?,
 ) -> Result[(Array[Node], Cursor), String] {
   let nodes : Array[Node] = []
-  let mut cursor = start.skip_layout()
+  let mut cursor = skip_content_layout(start, close, true)
   while !cursor.is_end() {
     match close {
       Some(ch) if cursor.peek() == Some(ch) =>
@@ -57,7 +57,7 @@ fn parse_nodes(
       Ok((node, next)) => {
         let (attached, after_attach) = maybe_attach_block_quote(node, next)
         nodes.push(attached)
-        cursor = after_attach.skip_layout()
+        cursor = skip_content_layout(after_attach, close, false)
       }
     }
   }
@@ -69,9 +69,9 @@ fn parse_nodes(
 
 ///|
 fn parse_node(cursor : Cursor) -> Result[(Node, Cursor), String] {
-  let start = cursor.skip_spaces()
+  let start = cursor
   if start.starts_with(";;") {
-    return parse_node(skip_line_comment(start).skip_layout())
+    return parse_node(skip_content_layout(skip_line_comment(start), None, true))
   }
   if start.at_line_start() &&
     (start.peek() == Some('-') || start.peek() == Some('+')) {
@@ -94,6 +94,40 @@ fn parse_node(cursor : Cursor) -> Result[(Node, Cursor), String] {
       Ok((Node::Text(text), next))
     }
   }
+}
+
+///|
+fn skip_content_layout(
+  cursor : Cursor,
+  close : Char?,
+  can_skip_spaces : Bool,
+) -> Cursor {
+  let mut current = cursor
+  let mut skip_spaces = can_skip_spaces
+  let mut keep_going = true
+  while keep_going {
+    keep_going = false
+    let spaced = current.skip_spaces()
+    match close {
+      Some(ch) if spaced.peek() == Some(ch) => return spaced
+      _ => ()
+    }
+    if spaced.is_end() {
+      return spaced
+    }
+    if spaced.starts_with(";;") {
+      current = skip_line_comment(spaced)
+      skip_spaces = true
+      keep_going = true
+    } else if spaced.peek() == Some('\n') {
+      current = spaced.advance(1)
+      skip_spaces = true
+      keep_going = true
+    } else if skip_spaces {
+      current = spaced
+    }
+  }
+  current
 }
 
 ///|
@@ -130,13 +164,13 @@ fn parse_def(after_head : Cursor) -> Result[(Node, Cursor), String] {
     Err(error) => return Err(error)
   }
   let body : Array[Node] = []
-  let mut cursor = after_params.skip_layout()
+  let mut cursor = skip_content_layout(after_params, Some(')'), true)
   while !cursor.is_end() && cursor.peek() != Some(')') {
     match parse_node(cursor) {
       Err(error) => return Err(error)
       Ok((node, next)) => {
         body.push(node)
-        cursor = next.skip_layout()
+        cursor = skip_content_layout(next, Some(')'), false)
       }
     }
   }
@@ -154,13 +188,13 @@ fn parse_let(after_head : Cursor) -> Result[(Node, Cursor), String] {
     return Err(name_start.error("let name cannot be empty"))
   }
   let values : Array[Node] = []
-  let mut cursor = after_name.skip_layout()
+  let mut cursor = skip_content_layout(after_name, Some(')'), true)
   while !cursor.is_end() && cursor.peek() != Some(')') {
     match parse_node(cursor) {
       Err(error) => return Err(error)
       Ok((node, next)) => {
         values.push(node)
-        cursor = next.skip_layout()
+        cursor = skip_content_layout(next, Some(')'), false)
       }
     }
   }
