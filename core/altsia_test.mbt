@@ -83,6 +83,25 @@ test "template supports fragments and attributes" {
 }
 
 ///|
+test "template definitions are hoisted within the same scope" {
+  let input =
+    #|(card Hello)
+    #|(def card (body) (p (body)))
+  @test.assert_eq(altsia_to_html(input), Ok("<p>Hello</p>"))
+}
+
+///|
+test "template hoisting does not cross child scopes" {
+  let input =
+    #|(section (:title "Outer")
+    #|  (section (:title "Inner")
+    #|    (def card (body) (p (body))))
+    #|  (card Hello))
+  let expected = "<section><h1>Outer</h1><section><h2>Inner</h2></section><p><card>Hello</card></p></section>"
+  @test.assert_eq(altsia_to_html(input), Ok(expected))
+}
+
+///|
 test "template reports argument errors" {
   @test.assert_eq(
     altsia_to_html("(def t (x) (x))(t (:missing nope))"),

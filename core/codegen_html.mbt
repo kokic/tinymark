@@ -71,6 +71,7 @@ fn compile_html_document(
   let explicit_head : Array[HtmlNode] = []
   let body : Array[HtmlNode] = []
   let inline_run : Array[HtmlNode] = []
+  prebind_direct_templates(env, nodes)
   for node in nodes {
     match node {
       Let(name, value) => bind_value(env, name, value)
@@ -341,6 +342,7 @@ fn compile_node_sequence(
   let out : Array[HtmlNode] = []
   let inline_run : Array[HtmlNode] = []
   let local_env = clone_env(env)
+  prebind_direct_templates(local_env, nodes)
   for node in nodes {
     match node {
       Let(name, value) => bind_value(local_env, name, value)
@@ -395,6 +397,16 @@ fn compile_mixed_children(
     children_need_paragraphs(children, env),
     false,
   )
+}
+
+///|
+fn prebind_direct_templates(env : Array[Binding], nodes : Array[Node]) -> Unit {
+  for node in nodes {
+    match node {
+      Def(name, params, body) => bind_template(env, name, params, body)
+      _ => ()
+    }
+  }
 }
 
 ///|
@@ -517,6 +529,7 @@ fn children_need_paragraphs(
   env : Array[Binding],
 ) -> Bool {
   let local_env = clone_env(env)
+  prebind_direct_templates(local_env, children)
   for child in children {
     match child {
       Let(name, value) => bind_value(local_env, name, value)
