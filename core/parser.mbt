@@ -525,10 +525,19 @@ fn parse_text(cursor : Cursor) -> (String, Cursor) {
       break
     }
     if ch == '\n' {
-      if index + 1 < cursor.length() && cursor.char_at(index + 1) == '\n' {
+      let mut next = index + 1
+      while next < cursor.length() {
+        let space = cursor.char_at(next)
+        if space == ' ' || space == '\t' || space == '\r' {
+          next += 1
+        } else {
+          break
+        }
+      }
+      if next < cursor.length() && cursor.char_at(next) == '\n' {
         buffer.push('\n')
         buffer.push('\n')
-        index += 2
+        index = next + 1
       } else {
         index += 1
       }

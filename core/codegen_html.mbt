@@ -547,13 +547,13 @@ fn children_need_paragraphs(
 ///|
 fn node_needs_paragraph_context(node : Node, env : Array[Binding]) -> Bool {
   match node {
-    Text(text) => text.contains("\n\n")
-    TextInterp(text) => text.contains("\n\n")
+    Text(text) => has_paragraph_break(text)
+    TextInterp(text) => has_paragraph_break(text)
     Element(tag, _, _) => is_source_block_tag(tag)
     Ref(name) =>
       match lookup_value(env, name) {
-        Some(Scalar(text)) => text.contains("\n\n")
-        Some(Interp(text)) => text.contains("\n\n")
+        Some(Scalar(text)) => has_paragraph_break(text)
+        Some(Interp(text)) => has_paragraph_break(text)
         Some(Fragment(nodes)) => children_need_paragraphs(nodes, env)
         _ => false
       }
@@ -1046,7 +1046,7 @@ fn append_with_paragraph_splits(
   node : HtmlNode,
 ) -> Unit {
   match node {
-    HtmlNode::Text(text) if text.contains("\n\n") =>
+    HtmlNode::Text(text) if has_paragraph_break(text) =>
       append_text_with_paragraph_splits(inline_run, out, text)
     _ => inline_run.push(node)
   }
@@ -1062,16 +1062,15 @@ fn append_text_with_paragraph_splits(
   let mut start = 0
   let mut index = 0
   while index < chars.length() {
-    if chars[index] == '\n' &&
-      index + 1 < chars.length() &&
-      chars[index + 1] == '\n' {
+    let break_end = paragraph_break_end(chars, index)
+    if break_end >= 0 {
       if index > start {
         inline_run.push(
           HtmlNode::Text(String::from_array(chars.view(start~, end=index))),
         )
       }
       flush_paragraph(inline_run, out)
-      index += 2
+      index = break_end
       start = index
     } else {
       index += 1
@@ -1080,6 +1079,40 @@ fn append_text_with_paragraph_splits(
   if start < chars.length() {
     inline_run.push(HtmlNode::Text(String::from_array(chars.view(start~))))
   }
+}
+
+///|
+fn has_paragraph_break(text : String) -> Bool {
+  let chars = text.to_array()
+  let mut index = 0
+  while index < chars.length() {
+    if paragraph_break_end(chars, index) >= 0 {
+      return true
+    }
+    index += 1
+  }
+  false
+}
+
+///|
+fn paragraph_break_end(chars : Array[Char], index : Int) -> Int {
+  if chars[index] != '\n' {
+    return -1
+  }
+  let mut scan = index + 1
+  while scan < chars.length() && is_blank_line_space(chars[scan]) {
+    scan += 1
+  }
+  if scan < chars.length() && chars[scan] == '\n' {
+    scan + 1
+  } else {
+    -1
+  }
+}
+
+///|
+fn is_blank_line_space(ch : Char) -> Bool {
+  ch == ' ' || ch == '\t' || ch == '\r'
 }
 
 ///|

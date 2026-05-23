@@ -59,6 +59,17 @@ test "mixed block wraps paragraphs only when needed" {
 }
 
 ///|
+test "mixed block wraps paragraphs only when needed #2" {
+  let input =
+    #|(block
+    #|First paragraph.
+    #|  
+    #|Second paragraph.)
+  let expected = "<div><p>First paragraph.</p><p>Second paragraph.</p></div>"
+  @test.assert_eq(altsia_to_html(input), Ok(expected))
+}
+
+///|
 test "mixed block detects paragraph need through local refs" {
   let input =
     #|(block
