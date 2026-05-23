@@ -101,6 +101,20 @@ test "template supports fragments and attributes" {
 }
 
 ///|
+test "underscore groups multiple values as one template argument" {
+  let input =
+    #|(def joined (body) (p (body)))
+    #|(joined (_ "a" "b" "c"))
+  let expected = "<p>a b c</p>"
+  @test.assert_eq(altsia_to_html(input), Ok(expected))
+}
+
+///|
+test "underscore does not render a wrapper tag" {
+  @test.assert_eq(altsia_to_html("(_ (em a) b)"), Ok("<p><em>a</em> b</p>"))
+}
+
+///|
 test "template definitions are hoisted within the same scope" {
   let input =
     #|(card Hello)

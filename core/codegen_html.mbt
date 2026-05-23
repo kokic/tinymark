@@ -467,6 +467,7 @@ fn compile_element(
   heading_level : Int,
 ) -> Result[Array[HtmlNode], String] {
   match tag {
+    "_" => compile_inline_children(children, env, heading_level)
     "section" => compile_section(attrs, children, env, heading_level)
     "list" => compile_mapped_element("ul", attrs, children, env, heading_level)
     "enum" => compile_mapped_element("ol", attrs, children, env, heading_level)
@@ -768,6 +769,7 @@ fn positional_values(children : Array[Node]) -> Array[Value] {
     match child {
       Text(text) => append_text_arg(values, text)
       TextInterp(text) => values.push(Value::Interp(text))
+      Element("_", _, nodes) => values.push(Value::Fragment(nodes))
       _ => values.push(nodes_to_value([child]))
     }
   }
