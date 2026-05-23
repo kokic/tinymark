@@ -85,7 +85,7 @@ test "mixed block detects paragraph need through local refs" {
 test "template supports positional and named arguments" {
   let input =
     #|(def reorder (x y z) (p (z) (y) (x)))
-    #|(reorder (:y `Y`) X Z)
+    #|(reorder (:y `Y`) `X` `Z`)
   let expected = "<p>Z Y X</p>"
   @test.assert_eq(altsia_to_html(input), Ok(expected))
 }
@@ -135,6 +135,10 @@ test "template reports argument errors" {
   )
   @test.assert_eq(
     altsia_to_html("(def t (x y) (x))(t one)"),
+    Err("missing template argument: y"),
+  )
+  @test.assert_eq(
+    altsia_to_html("(def t (x y) (x))(t one two)"),
     Err("missing template argument: y"),
   )
 }

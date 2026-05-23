@@ -766,7 +766,7 @@ fn positional_values(children : Array[Node]) -> Array[Value] {
   let values : Array[Value] = []
   for child in children {
     match child {
-      Text(text) => append_text_args(values, text)
+      Text(text) => append_text_arg(values, text)
       TextInterp(text) => values.push(Value::Interp(text))
       _ => values.push(nodes_to_value([child]))
     }
@@ -775,28 +775,11 @@ fn positional_values(children : Array[Node]) -> Array[Value] {
 }
 
 ///|
-fn append_text_args(values : Array[Value], text : String) -> Unit {
-  let chars = text.to_array()
-  let mut index = 0
-  while index < chars.length() {
-    while index < chars.length() && is_arg_space(chars[index]) {
-      index += 1
-    }
-    let start = index
-    while index < chars.length() && !is_arg_space(chars[index]) {
-      index += 1
-    }
-    if index > start {
-      values.push(
-        Value::Scalar(String::from_array(chars.view(start~, end=index))),
-      )
-    }
+fn append_text_arg(values : Array[Value], text : String) -> Unit {
+  let trimmed = text.trim().to_owned()
+  if !trimmed.is_empty() {
+    values.push(Value::Scalar(trimmed))
   }
-}
-
-///|
-fn is_arg_space(ch : Char) -> Bool {
-  ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n'
 }
 
 ///|
