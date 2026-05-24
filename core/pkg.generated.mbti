@@ -6,7 +6,7 @@ import {
 }
 
 // Values
-pub const HTML_IMPORT_KATEX : String = "<!-- Also see: https://katex.org/docs/autorender -->\n<link rel=\"stylesheet\" href=\"https://cdn.jsdelivr.net/npm/katex@0.16.45/dist/katex.min.css\" integrity=\"sha384-UA8juhPf75SzzAMA/4fo3yOU7sBJ0om7SCD2GHq0fZqZco6tr1UCV7nUbk9J90JM\" crossorigin=\"anonymous\">\n<script defer src=\"https://cdn.jsdelivr.net/npm/katex@0.16.45/dist/katex.min.js\" integrity=\"sha384-Tt7wBxLKwSzFVRET4O4U9H6v8MNaQ/CjN2FMP4xFm0ErrFu6aNqoonRVW5W40iGI\" crossorigin=\"anonymous\"></script>\n<script defer src=\"https://cdn.jsdelivr.net/npm/katex@0.16.45/dist/contrib/auto-render.min.js\" integrity=\"sha384-bjyGPfbij8/NDKJhSGZNP/khQVgtHUE5exjm4Ydllo42FwIgYsdLO2lXGmRBf5Mz\" crossorigin=\"anonymous\"></script>\n<!-- Also see: https://github.com/KaTeX/KaTeX/tree/main/contrib/copy-tex -->\n<script src=\"https://cdn.jsdelivr.net/npm/katex@0.16.45/dist/contrib/copy-tex.min.js\" integrity=\"sha384-Pe2JWbaShhSRT0SESJ9XLPeAsi4yrNi7r/CiH0Coq7giBjK5a6Ae7XcybE8rNlQP\" crossorigin=\"anonymous\"></script>\n\n<script>\n  document.addEventListener(\"DOMContentLoaded\", function () {\n    renderMathInElement(document.body, {\n      delimiters: [\n        { left: \"$$\", right: \"$$\", display: true },\n        { left: \"$\", right: \"$\", display: false },\n        { left: \"\\\\(\", right: \"\\\\)\", display: false },\n        { left: \"\\\\[\", right: \"\\\\]\", display: true },\n      ],\n      trust: true,\n      strict: false,\n      throwOnError: false,\n      minRuleThickness: 0.05,\n    });\n  });\n</script>"
+pub const HTML_IMPORT_KATEX : String = "<!-- Also see: https://katex.org/docs/autorender -->\n<link rel=\"stylesheet\" href=\"https://cdn.jsdelivr.net/npm/katex@0.17.0/dist/katex.min.css\" integrity=\"sha384-vlBdW0r3AcZO/HboRPznQNowvexd3fY8qHOWkBi5q7KGgqJ+F48+DceybYmrVbmB\" crossorigin=\"anonymous\">\n<script defer src=\"https://cdn.jsdelivr.net/npm/katex@0.17.0/dist/katex.min.js\" integrity=\"sha384-AtrdNsnxl/75rvBneBVH7DtOvCxSVahR2zWqle1coBKd8DEmLoviqNeJSx64gNAs\" crossorigin=\"anonymous\"></script>\n<script defer src=\"https://cdn.jsdelivr.net/npm/katex@0.17.0/dist/contrib/auto-render.min.js\" integrity=\"sha384-bjyGPfbij8/NDKJhSGZNP/khQVgtHUE5exjm4Ydllo42FwIgYsdLO2lXGmRBf5Mz\" crossorigin=\"anonymous\"></script>\n\n<!-- Also see: https://github.com/KaTeX/KaTeX/tree/main/contrib/copy-tex -->\n<script src=\"https://cdn.jsdelivr.net/npm/katex@0.17.0/dist/contrib/copy-tex.min.js\" integrity=\"sha384-Pe2JWbaShhSRT0SESJ9XLPeAsi4yrNi7r/CiH0Coq7giBjK5a6Ae7XcybE8rNlQP\" crossorigin=\"anonymous\"></script>\n\n<script>\n  document.addEventListener(\"DOMContentLoaded\", function () {\n    renderMathInElement(document.body, {\n      delimiters: [\n        { left: \"$$\", right: \"$$\", display: true },\n        { left: \"$\", right: \"$\", display: false },\n        { left: \"\\\\(\", right: \"\\\\)\", display: false },\n        { left: \"\\\\[\", right: \"\\\\]\", display: true },\n      ],\n      trust: true,\n      strict: false,\n      throwOnError: false,\n      minRuleThickness: 0.05,\n    });\n  });\n</script>"
 
 pub fn altsia_to_html(String) -> Result[String, String]
 
@@ -19,6 +19,12 @@ pub fn parse_altsia(String) -> Result[Array[Node], String]
 // Errors
 
 // Types and methods
+pub(all) struct Attr {
+  name : String
+  value : Value?
+  span : SourceSpan
+}
+
 pub(all) struct HtmlDocumentOptions {
   doctype : String?
   charset : String?
@@ -29,23 +35,30 @@ pub fn HtmlDocumentOptions::default() -> Self
 pub fn HtmlDocumentOptions::empty() -> Self
 
 pub(all) enum Node {
-  Text(String)
-  TextInterp(String)
-  Element(String, Array[(String, Value?)], Array[Node])
-  HtmlHead(Array[(String, Value?)], Array[Node])
-  Ref(String)
-  Let(String, Value)
-  Def(String, Array[String], Array[Node])
-  Meta(Array[(String, Value?)])
-  When(String, Array[Node])
-  Unless(String, Array[Node])
+  Text(String, SourceSpan)
+  TextInterp(String, SourceSpan)
+  Element(String, Array[Attr], Array[Node], SourceSpan)
+  HtmlHead(Array[Attr], Array[Node], SourceSpan)
+  Ref(String, SourceSpan)
+  Let(String, Value, SourceSpan)
+  Def(String, Array[String], Array[Node], SourceSpan)
+  Meta(Array[Attr], SourceSpan)
+  When(String, Array[Node], SourceSpan)
+  Unless(String, Array[Node], SourceSpan)
+}
+
+pub(all) struct SourceSpan {
+  line : Int
+  column : Int
+  marker_column : Int
+  line_text : String
 }
 
 pub(all) enum Value {
-  Scalar(String)
-  Bool(Bool)
-  Fragment(Array[Node])
-  Interp(String)
+  Scalar(String, SourceSpan)
+  Bool(Bool, SourceSpan)
+  Fragment(Array[Node], SourceSpan)
+  Interp(String, SourceSpan)
 }
 
 // Type aliases
