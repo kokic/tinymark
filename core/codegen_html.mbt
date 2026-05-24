@@ -67,21 +67,21 @@ fn compile_html_document(
   options : HtmlDocumentOptions,
 ) -> Result[String, String] {
   let env : Array[Binding] = []
-  let meta_attrs : Array[(String, Value?)] = []
+  let meta_attrs : Array[Attr] = []
   let explicit_head : Array[HtmlNode] = []
   let body : Array[HtmlNode] = []
   let inline_run : Array[HtmlNode] = []
   prebind_direct_templates(env, nodes)
   for node in nodes {
     match node {
-      Let(name, value) => bind_value(env, name, value)
-      Def(name, params, body) => bind_template(env, name, params, body)
-      Meta(attrs) =>
+      Let(name, value, _) => bind_value(env, name, value)
+      Def(name, params, body, _) => bind_template(env, name, params, body)
+      Meta(attrs, _) =>
         for attr in attrs {
           meta_attrs.push(attr)
           bind_meta_attr(env, attr)
         }
-      HtmlHead(_, children) =>
+      HtmlHead(_, children, _) =>
         match compile_node_sequence(children, env, 1, false, false) {
           Err(error) => return Err(error)
           Ok(compiled) =>
@@ -176,18 +176,20 @@ fn render_open_tag(tag : String, attrs : Array[(String, String?)]) -> String {
 
 ///|
 fn html_document_attrs(
-  meta_attrs : Array[(String, Value?)],
+  meta_attrs : Array[Attr],
   env : Array[Binding],
 ) -> Result[Array[(String, String?)], String] {
   let attrs : Array[(String, String?)] = []
   for attr in meta_attrs {
-    match attr {
-      ("lang", Some(value)) =>
-        match value_to_scalar(value, env) {
-          Ok(text) => set_attr(attrs, "lang", Some(text))
-          Err(error) => return Err(error)
-        }
-      _ => ()
+    if attr.name == "lang" {
+      match attr.value {
+        Some(value) =>
+          match value_to_scalar(value, env) {
+            Ok(text) => set_attr(attrs, "lang", Some(text))
+            Err(error) => return Err(error)
+          }
+        None => ()
+      }
     }
   }
   Ok(attrs)
@@ -195,7 +197,7 @@ fn html_document_attrs(
 
 ///|
 fn html_head_nodes(
-  meta_attrs : Array[(String, Value?)],
+  meta_attrs : Array[Attr],
   explicit_head : Array[HtmlNode],
   env : Array[Binding],
   options : HtmlDocumentOptions,
@@ -226,7 +228,7 @@ fn html_head_nodes(
 ///|
 fn push_optional_head_meta(
   head : Array[HtmlNode],
-  meta_attrs : Array[(String, Value?)],
+  meta_attrs : Array[Attr],
   env : Array[Binding],
 ) -> Result[Unit, String] {
   push_optional_meta_node(head, meta_attrs, "title", env, text => {
@@ -247,7 +249,7 @@ fn push_optional_head_meta(
 ///|
 fn push_optional_meta_node(
   head : Array[HtmlNode],
-  meta_attrs : Array[(String, Value?)],
+  meta_attrs : Array[Attr],
   name : String,
   env : Array[Binding],
   make_node : (String) -> HtmlNode,
@@ -264,7 +266,7 @@ fn push_optional_meta_node(
 
 ///|
 fn meta_scalar_or_default(
-  meta_attrs : Array[(String, Value?)],
+  meta_attrs : Array[Attr],
   key : String,
   default : String?,
   env : Array[Binding],
@@ -278,19 +280,21 @@ fn meta_scalar_or_default(
 
 ///|
 fn meta_scalar(
-  meta_attrs : Array[(String, Value?)],
+  meta_attrs : Array[Attr],
   key : String,
   env : Array[Binding],
 ) -> Result[String?, String] {
   let mut found : String? = None
   for attr in meta_attrs {
-    match attr {
-      (name, Some(value)) if name == key =>
-        match value_to_scalar(value, env) {
-          Ok(text) => found = Some(text)
-          Err(error) => return Err(error)
-        }
-      _ => ()
+    if attr.name == key {
+      match attr.value {
+        Some(value) =>
+          match value_to_scalar(value, env) {
+            Ok(text) => found = Some(text)
+            Err(error) => return Err(error)
+          }
+        None => ()
+      }
     }
   }
   Ok(found)
@@ -345,13 +349,13 @@ fn compile_node_sequence(
   prebind_direct_templates(local_env, nodes)
   for node in nodes {
     match node {
-      Let(name, value) => bind_value(local_env, name, value)
-      Def(name, params, body) => bind_template(local_env, name, params, body)
-      Meta(attrs) =>
+      Let(name, value, _) => bind_value(local_env, name, value)
+      Def(name, params, body, _) => bind_template(local_env, name, params, body)
+      Meta(attrs, _) =>
         for attr in attrs {
           bind_meta_attr(local_env, attr)
         }
-      HtmlHead(_, _) if allow_html_head => ()
+      HtmlHead(_, _, _) if allow_html_head => ()
       _ =>
         match compile_node(node, local_env, heading_level, false) {
           Err(error) => return Err(error)
@@ -403,7 +407,7 @@ fn compile_mixed_children(
 fn prebind_direct_templates(env : Array[Binding], nodes : Array[Node]) -> Unit {
   for node in nodes {
     match node {
-      Def(name, params, body) => bind_template(env, name, params, body)
+      Def(name, params, body, _) => bind_template(env, name, params, body)
       _ => ()
     }
   }
@@ -417,51 +421,51 @@ fn compile_node(
   allow_html_head : Bool,
 ) -> Result[Array[HtmlNode], String] {
   match node {
-    Text(text) => Ok([HtmlNode::Text(text)])
-    TextInterp(text) =>
-      interpolate(text, env).map(fn(value) { [HtmlNode::Text(value)] })
-    Ref(name) =>
+    Text(text, _) => Ok([HtmlNode::Text(text)])
+    TextInterp(text, span) =>
+      interpolate(text, env, span).map(fn(value) { [HtmlNode::Text(value)] })
+    Ref(name, span) =>
       match lookup_value(env, name) {
         Some(value) => value_to_nodes(value, env, heading_level)
         None =>
           match lookup_template(env, name) {
             Some(template) =>
-              expand_template(template, [], [], env, heading_level)
+              expand_template(template, [], [], env, heading_level, span)
             None => Ok([HtmlNode::Element(name, [], [])])
           }
       }
-    Element(tag, attrs, children) =>
+    Element(tag, attrs, children, span) =>
       match lookup_template(env, tag) {
         Some(template) =>
-          expand_template(template, attrs, children, env, heading_level)
+          expand_template(template, attrs, children, env, heading_level, span)
         None => compile_element(tag, attrs, children, env, heading_level)
       }
-    HtmlHead(_, _) =>
+    HtmlHead(_, _, span) =>
       if allow_html_head {
         Ok([])
       } else {
-        Err("html.head is only allowed at document top level")
+        Err(span.error("html.head is only allowed at document top level"))
       }
-    When(name, children) =>
-      match bool_binding(env, name) {
+    When(name, children, span) =>
+      match bool_binding(env, name, span) {
         Ok(true) => compile_inline_children(children, env, heading_level)
         Ok(false) => Ok([])
         Err(error) => Err(error)
       }
-    Unless(name, children) =>
-      match bool_binding(env, name) {
+    Unless(name, children, span) =>
+      match bool_binding(env, name, span) {
         Ok(true) => Ok([])
         Ok(false) => compile_inline_children(children, env, heading_level)
         Err(error) => Err(error)
       }
-    Let(_, _) | Def(_, _, _) | Meta(_) => Ok([])
+    Let(_, _, _) | Def(_, _, _, _) | Meta(_, _) => Ok([])
   }
 }
 
 ///|
 fn compile_element(
   tag : String,
-  attrs : Array[(String, Value?)],
+  attrs : Array[Attr],
   children : Array[Node],
   env : Array[Binding],
   heading_level : Int,
@@ -487,7 +491,7 @@ fn compile_element(
 ///|
 fn compile_mapped_element(
   tag : String,
-  attrs : Array[(String, Value?)],
+  attrs : Array[Attr],
   children : Array[Node],
   env : Array[Binding],
   heading_level : Int,
@@ -533,9 +537,9 @@ fn children_need_paragraphs(
   prebind_direct_templates(local_env, children)
   for child in children {
     match child {
-      Let(name, value) => bind_value(local_env, name, value)
-      Def(name, params, body) => bind_template(local_env, name, params, body)
-      Meta(attrs) =>
+      Let(name, value, _) => bind_value(local_env, name, value)
+      Def(name, params, body, _) => bind_template(local_env, name, params, body)
+      Meta(attrs, _) =>
         for attr in attrs {
           bind_meta_attr(local_env, attr)
         }
@@ -548,27 +552,27 @@ fn children_need_paragraphs(
 ///|
 fn node_needs_paragraph_context(node : Node, env : Array[Binding]) -> Bool {
   match node {
-    Text(text) => has_paragraph_break(text)
-    TextInterp(text) => has_paragraph_break(text)
-    Element(tag, _, _) => is_source_block_tag(tag)
-    Ref(name) =>
+    Text(text, _) => has_paragraph_break(text)
+    TextInterp(text, _) => has_paragraph_break(text)
+    Element(tag, _, _, _) => is_source_block_tag(tag)
+    Ref(name, _) =>
       match lookup_value(env, name) {
-        Some(Scalar(text)) => has_paragraph_break(text)
-        Some(Interp(text)) => has_paragraph_break(text)
-        Some(Fragment(nodes)) => children_need_paragraphs(nodes, env)
+        Some(Scalar(text, _)) => has_paragraph_break(text)
+        Some(Interp(text, _)) => has_paragraph_break(text)
+        Some(Fragment(nodes, _)) => children_need_paragraphs(nodes, env)
         _ => false
       }
-    When(name, children) =>
-      match bool_binding(env, name) {
+    When(name, children, span) =>
+      match bool_binding(env, name, span) {
         Ok(true) => children_need_paragraphs(children, env)
         _ => false
       }
-    Unless(name, children) =>
-      match bool_binding(env, name) {
+    Unless(name, children, span) =>
+      match bool_binding(env, name, span) {
         Ok(false) => children_need_paragraphs(children, env)
         _ => false
       }
-    Let(_, _) | Def(_, _, _) | Meta(_) | HtmlHead(_, _) => false
+    Let(_, _, _) | Def(_, _, _, _) | Meta(_, _) | HtmlHead(_, _, _) => false
   }
 }
 
@@ -596,7 +600,7 @@ fn is_source_block_tag(tag : String) -> Bool {
 
 ///|
 fn compile_section(
-  attrs : Array[(String, Value?)],
+  attrs : Array[Attr],
   children : Array[Node],
   env : Array[Binding],
   heading_level : Int,
@@ -605,17 +609,20 @@ fn compile_section(
   let section_children : Array[HtmlNode] = []
   let mut title : String? = None
   for attr in attrs {
-    match attr {
-      ("title", Some(value)) =>
-        match value_to_scalar(value, env) {
-          Ok(text) => title = Some(text)
-          Err(error) => return Err(error)
-        }
-      (name, value) =>
-        match compile_attr_value(value, env) {
-          Ok(compiled) => html_attrs.push((name, compiled))
-          Err(error) => return Err(error)
-        }
+    if attr.name == "title" {
+      match attr.value {
+        Some(value) =>
+          match value_to_scalar(value, env) {
+            Ok(text) => title = Some(text)
+            Err(error) => return Err(error)
+          }
+        None => ()
+      }
+    } else {
+      match compile_attr_value(attr.value, env) {
+        Ok(compiled) => html_attrs.push((attr.name, compiled))
+        Err(error) => return Err(error)
+      }
     }
   }
   match title {
@@ -639,7 +646,7 @@ fn compile_section(
 ///|
 fn compile_admonition(
   kind : String,
-  attrs : Array[(String, Value?)],
+  attrs : Array[Attr],
   children : Array[Node],
   env : Array[Binding],
   heading_level : Int,
@@ -659,7 +666,7 @@ fn compile_admonition(
 
 ///|
 fn compile_code(
-  attrs : Array[(String, Value?)],
+  attrs : Array[Attr],
   children : Array[Node],
   env : Array[Binding],
   heading_level : Int,
@@ -693,7 +700,7 @@ fn compile_code(
 
 ///|
 fn compile_slot(
-  attrs : Array[(String, Value?)],
+  attrs : Array[Attr],
   children : Array[Node],
   env : Array[Binding],
   heading_level : Int,
@@ -712,26 +719,36 @@ fn compile_slot(
 ///|
 fn expand_template(
   template : Template,
-  attrs : Array[(String, Value?)],
+  attrs : Array[Attr],
   children : Array[Node],
   call_env : Array[Binding],
   heading_level : Int,
+  call_span : SourceSpan,
 ) -> Result[Array[HtmlNode], String] {
   let values : Array[Value?] = []
   for _ in template.params {
     values.push(None)
   }
   for attr in attrs {
-    match attr {
-      (name, None) => return Err("template argument requires a value: " + name)
-      (name, Some(value)) =>
-        match param_index(template.params, name) {
+    match attr.value {
+      None =>
+        return Err(
+          attr.span.error("template argument requires a value: " + attr.name),
+        )
+      Some(value) =>
+        match param_index(template.params, attr.name) {
           Some(index) =>
             match values[index] {
-              Some(_) => return Err("duplicate template argument: " + name)
+              Some(_) =>
+                return Err(
+                  attr.span.error("duplicate template argument: " + attr.name),
+                )
               None => values[index] = Some(value)
             }
-          None => return Err("unknown template argument: " + name)
+          None =>
+            return Err(
+              attr.span.error("unknown template argument: " + attr.name),
+            )
         }
     }
   }
@@ -746,7 +763,7 @@ fn expand_template(
       }
     }
     if next_param >= values.length() {
-      return Err("too many template arguments")
+      return Err(arg.span().error("too many template arguments"))
     }
     values[next_param] = Some(arg)
     next_param += 1
@@ -756,7 +773,12 @@ fn expand_template(
   for index in 0..<template.params.length() {
     match values[index] {
       Some(value) => bind_value(template_env, template.params[index], value)
-      None => return Err("missing template argument: " + template.params[index])
+      None =>
+        return Err(
+          call_span.error(
+            "missing template argument: " + template.params[index],
+          ),
+        )
     }
   }
   compile_inline_children(template.body, template_env, heading_level)
@@ -767,9 +789,9 @@ fn positional_values(children : Array[Node]) -> Array[Value] {
   let values : Array[Value] = []
   for child in children {
     match child {
-      Text(text) => append_text_arg(values, text)
-      TextInterp(text) => values.push(Value::Interp(text))
-      Element("_", _, nodes) => values.push(Value::Fragment(nodes))
+      Text(text, span) => append_text_arg(values, text, span)
+      TextInterp(text, span) => values.push(Value::Interp(text, span))
+      Element("_", _, nodes, span) => values.push(Value::Fragment(nodes, span))
       _ => values.push(nodes_to_value([child]))
     }
   }
@@ -777,10 +799,14 @@ fn positional_values(children : Array[Node]) -> Array[Value] {
 }
 
 ///|
-fn append_text_arg(values : Array[Value], text : String) -> Unit {
+fn append_text_arg(
+  values : Array[Value],
+  text : String,
+  span : SourceSpan,
+) -> Unit {
   let trimmed = text.trim().to_owned()
   if !trimmed.is_empty() {
-    values.push(Value::Scalar(trimmed))
+    values.push(Value::Scalar(trimmed, span))
   }
 }
 
@@ -800,15 +826,29 @@ fn plain_text(
   env : Array[Binding],
   heading_level : Int,
 ) -> Result[String, String] {
-  let nodes = match compile_inline_children(children, env, heading_level) {
-    Ok(value) => value
-    Err(error) => return Err(error)
-  }
   let parts : Array[String] = []
-  for node in nodes {
-    match node {
-      HtmlNode::Text(text) => parts.push(text)
-      _ => return Err("expected plain text content")
+  let local_env = clone_env(env)
+  prebind_direct_templates(local_env, children)
+  for child in children {
+    match child {
+      Let(name, value, _) => bind_value(local_env, name, value)
+      Def(name, params, body, _) => bind_template(local_env, name, params, body)
+      Meta(attrs, _) =>
+        for attr in attrs {
+          bind_meta_attr(local_env, attr)
+        }
+      _ => {
+        let nodes = match compile_node(child, local_env, heading_level, false) {
+          Ok(value) => value
+          Err(error) => return Err(error)
+        }
+        for node in nodes {
+          match node {
+            HtmlNode::Text(text) => parts.push(text)
+            _ => return Err(child.span().error("expected plain text content"))
+          }
+        }
+      }
     }
   }
   Ok(parts.join(""))
@@ -816,17 +856,14 @@ fn plain_text(
 
 ///|
 fn compile_attrs(
-  attrs : Array[(String, Value?)],
+  attrs : Array[Attr],
   env : Array[Binding],
 ) -> Result[Array[(String, String?)], String] {
   let html_attrs : Array[(String, String?)] = []
   for attr in attrs {
-    match attr {
-      (name, value) =>
-        match compile_attr_value(value, env) {
-          Ok(compiled) => html_attrs.push((name, compiled))
-          Err(error) => return Err(error)
-        }
+    match compile_attr_value(attr.value, env) {
+      Ok(compiled) => html_attrs.push((attr.name, compiled))
+      Err(error) => return Err(error)
     }
   }
   Ok(html_attrs)
@@ -849,10 +886,10 @@ fn value_to_scalar(
   env : Array[Binding],
 ) -> Result[String, String] {
   match value {
-    Scalar(text) => Ok(text)
-    Bool(value) => Ok(if value { "true" } else { "false" })
-    Interp(template) => interpolate(template, env)
-    Fragment(_) => Err("expected scalar value")
+    Scalar(text, _) => Ok(text)
+    Bool(value, _) => Ok(if value { "true" } else { "false" })
+    Interp(template, span) => interpolate(template, env, span)
+    Fragment(_, span) => Err(span.error("expected scalar value"))
   }
 }
 
@@ -863,11 +900,11 @@ fn value_to_nodes(
   heading_level : Int,
 ) -> Result[Array[HtmlNode], String] {
   match value {
-    Scalar(text) => Ok([HtmlNode::Text(text)])
-    Bool(value) => Ok([HtmlNode::Text(if value { "true" } else { "false" })])
-    Interp(template) =>
-      interpolate(template, env).map(fn(text) { [HtmlNode::Text(text)] })
-    Fragment(nodes) => compile_inline_children(nodes, env, heading_level)
+    Scalar(text, _) => Ok([HtmlNode::Text(text)])
+    Bool(value, _) => Ok([HtmlNode::Text(if value { "true" } else { "false" })])
+    Interp(template, span) =>
+      interpolate(template, env, span).map(fn(text) { [HtmlNode::Text(text)] })
+    Fragment(nodes, _) => compile_inline_children(nodes, env, heading_level)
   }
 }
 
@@ -875,6 +912,7 @@ fn value_to_nodes(
 fn interpolate(
   template : String,
   env : Array[Binding],
+  span : SourceSpan,
 ) -> Result[String, String] {
   let chars = template.to_array()
   let parts : Array[String] = []
@@ -886,7 +924,7 @@ fn interpolate(
         end += 1
       }
       if end >= chars.length() {
-        return Err("unterminated interpolation")
+        return Err(span.error("unterminated interpolation"))
       }
       let name = String::from_array(chars.view(start=index + 1, end~))
       match lookup_value(env, name) {
@@ -895,7 +933,7 @@ fn interpolate(
             Ok(text) => parts.push(text)
             Err(error) => return Err(error)
           }
-        None => return Err("unbound interpolation name: " + name)
+        None => return Err(span.error("unbound interpolation name: " + name))
       }
       index = end + 1
     } else {
@@ -910,13 +948,17 @@ fn interpolate(
 }
 
 ///|
-fn bool_binding(env : Array[Binding], name : String) -> Result[Bool, String] {
+fn bool_binding(
+  env : Array[Binding],
+  name : String,
+  span : SourceSpan,
+) -> Result[Bool, String] {
   match lookup_value(env, name) {
-    Some(Bool(value)) => Ok(value)
-    Some(Scalar("true")) => Ok(true)
-    Some(Scalar("false")) => Ok(false)
-    Some(_) => Err("condition is not a boolean binding: " + name)
-    None => Err("unbound condition name: " + name)
+    Some(Bool(value, _)) => Ok(value)
+    Some(Scalar("true", _)) => Ok(true)
+    Some(Scalar("false", _)) => Ok(false)
+    Some(_) => Err(span.error("condition is not a boolean binding: " + name))
+    None => Err(span.error("unbound condition name: " + name))
   }
 }
 
@@ -971,10 +1013,10 @@ fn bind_template(
 }
 
 ///|
-fn bind_meta_attr(env : Array[Binding], attr : (String, Value?)) -> Unit {
-  match attr {
-    (name, Some(value)) => bind_value(env, name, value)
-    (_, None) => ()
+fn bind_meta_attr(env : Array[Binding], attr : Attr) -> Unit {
+  match attr.value {
+    Some(value) => bind_value(env, attr.name, value)
+    None => ()
   }
 }
 

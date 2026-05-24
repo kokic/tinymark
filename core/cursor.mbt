@@ -56,20 +56,12 @@ fn Cursor::at(self : Cursor, index : Int) -> Cursor {
 
 ///|
 fn Cursor::error(self : Cursor, message : String) -> String {
-  let (local_line, local_column) = self.local_line_column()
-  let line = self.line_offset + local_line
-  let column = if local_line == 1 {
-    self.column_offset + local_column
-  } else {
-    local_column
-  }
-  let (line_start, line_end) = self.line_bounds()
-  let source_line = self.slice_to_string(line_start, line_end)
-  let lineno_spaces = repeat_string(" ", line.to_string().length())
-  let column_spaces = repeat_string(" ", local_column - 1)
+  let span = self.source_span()
+  let lineno_spaces = repeat_string(" ", span.line.to_string().length())
+  let column_spaces = repeat_string(" ", span.marker_column - 1)
   (
-    $|parse error at line \{line.to_string()}, column \{column.to_string()}: \{message}
-    $|\{line.to_string()} | \{source_line}
+    $|parse error at line \{span.line.to_string()}, column \{span.column.to_string()}: \{message}
+    $|\{span.line.to_string()} | \{span.line_text}
     $|\{lineno_spaces} | \{column_spaces}^
   )
 }
@@ -86,6 +78,24 @@ fn Cursor::line_column(self : Cursor) -> (Int, Int) {
     (self.line_offset + line, self.column_offset + column)
   } else {
     (self.line_offset + line, column)
+  }
+}
+
+///|
+fn Cursor::source_span(self : Cursor) -> SourceSpan {
+  let (local_line, local_column) = self.local_line_column()
+  let line = self.line_offset + local_line
+  let column = if local_line == 1 {
+    self.column_offset + local_column
+  } else {
+    local_column
+  }
+  let (line_start, line_end) = self.line_bounds()
+  {
+    line,
+    column,
+    marker_column: local_column,
+    line_text: self.slice_to_string(line_start, line_end),
   }
 }
 

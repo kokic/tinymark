@@ -41,7 +41,7 @@ fn main {
   let html = match compiled {
     Ok(value) => value
     Err(error) => {
-      println("compile error: \{error}")
+      println(error)
       return
     }
   }

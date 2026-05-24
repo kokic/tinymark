@@ -135,25 +135,42 @@ test "template hoisting does not cross child scopes" {
 
 ///|
 test "template reports argument errors" {
+  let unknown_arg =
+    #|compile error at line 1, column 20: unknown template argument: missing
+    #|1 | (def t (x) (x))(t (:missing nope))
+    #|  |                    ^
+  let too_many_args =
+    #|compile error at line 1, column 28: too many template arguments
+    #|1 | (def t (x) (x))(t (:x one) two)
+    #|  |                            ^
+  let duplicate_arg =
+    #|compile error at line 1, column 27: duplicate template argument: x
+    #|1 | (def t (x) (x))(t (:x one :x two))
+    #|  |                           ^
+  let missing_arg =
+    #|compile error at line 1, column 19: missing template argument: y
+    #|1 | (def t (x y) (x))(t one)
+    #|  |                   ^
+  let missing_arg_text_run =
+    #|compile error at line 1, column 19: missing template argument: y
+    #|1 | (def t (x y) (x))(t one two)
+    #|  |                   ^
   @test.assert_eq(
     altsia_to_html("(def t (x) (x))(t (:missing nope))"),
-    Err("unknown template argument: missing"),
+    Err(unknown_arg),
   )
   @test.assert_eq(
     altsia_to_html("(def t (x) (x))(t (:x one) two)"),
-    Err("too many template arguments"),
+    Err(too_many_args),
   )
   @test.assert_eq(
     altsia_to_html("(def t (x) (x))(t (:x one :x two))"),
-    Err("duplicate template argument: x"),
+    Err(duplicate_arg),
   )
-  @test.assert_eq(
-    altsia_to_html("(def t (x y) (x))(t one)"),
-    Err("missing template argument: y"),
-  )
+  @test.assert_eq(altsia_to_html("(def t (x y) (x))(t one)"), Err(missing_arg))
   @test.assert_eq(
     altsia_to_html("(def t (x y) (x))(t one two)"),
-    Err("missing template argument: y"),
+    Err(missing_arg_text_run),
   )
 }
 
@@ -173,6 +190,27 @@ test "list item parse errors keep original location" {
     #|2 | )
     #|  | ^
   @test.assert_eq(altsia_to_html("- ok\n- )"), Err(expected))
+}
+
+///|
+test "compile errors include source location" {
+  let input =
+    #|(let label (em hot))
+    #|(span (:class (label)) Sale)
+  let expected =
+    #|compile error at line 1, column 12: expected scalar value
+    #|1 | (let label (em hot))
+    #|  |            ^
+  @test.assert_eq(altsia_to_html(input), Err(expected))
+}
+
+///|
+test "plain text errors include source location" {
+  let expected =
+    #|compile error at line 1, column 13: expected plain text content
+    #|1 | (codeblock (em js))
+    #|  |             ^
+  @test.assert_eq(altsia_to_html("(codeblock (em js))"), Err(expected))
 }
 
 ///|

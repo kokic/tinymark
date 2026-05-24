@@ -95,16 +95,16 @@ fn parse_node(cursor : Cursor) -> Result[(Node, Cursor), String] {
     Some('(') => parse_list(start)
     Some('`') =>
       parse_raw_string(start).map(fn(result) {
-        (Node::Text(result.0), result.1)
+        (Node::Text(result.0, start.source_span()), result.1)
       })
     Some('"') =>
       parse_quoted_string(start).map(fn(result) {
-        (Node::TextInterp(result.0), result.1)
+        (Node::TextInterp(result.0, start.source_span()), result.1)
       })
     Some('*') => parse_emphasis_or_text(start)
     _ => {
       let (text, next) = parse_text(start)
-      Ok((Node::Text(text), next))
+      Ok((Node::Text(text, start.source_span()), next))
     }
   }
 }
@@ -151,18 +151,21 @@ fn parse_list(open : Cursor) -> Result[(Node, Cursor), String] {
     return Err(head_start.error("list head cannot be empty"))
   }
   match head {
-    "def" => parse_def(after_head)
-    "let" => parse_let(after_head)
-    "meta" => parse_meta(after_head)
-    "html.head" => parse_html_head(after_head)
-    "when" => parse_conditional(after_head, true)
-    "unless" => parse_conditional(after_head, false)
-    _ => parse_element_or_ref(head, after_head)
+    "def" => parse_def(head_start, after_head)
+    "let" => parse_let(head_start, after_head)
+    "meta" => parse_meta(head_start, after_head)
+    "html.head" => parse_html_head(head_start, after_head)
+    "when" => parse_conditional(head_start, after_head, true)
+    "unless" => parse_conditional(head_start, after_head, false)
+    _ => parse_element_or_ref(head, head_start, after_head)
   }
 }
 
 ///|
-fn parse_def(after_head : Cursor) -> Result[(Node, Cursor), String] {
+fn parse_def(
+  head_start : Cursor,
+  after_head : Cursor,
+) -> Result[(Node, Cursor), String] {
   let name_start = after_head.skip_layout()
   let (name, after_name) = parse_name(name_start)
   if name.is_empty() {
@@ -190,11 +193,16 @@ fn parse_def(after_head : Cursor) -> Result[(Node, Cursor), String] {
   if cursor.peek() != Some(')') {
     return Err(after_head.error("unterminated def"))
   }
-  Ok((Node::Def(name, params, body), cursor.advance(1)))
+  Ok(
+    (Node::Def(name, params, body, head_start.source_span()), cursor.advance(1)),
+  )
 }
 
 ///|
-fn parse_let(after_head : Cursor) -> Result[(Node, Cursor), String] {
+fn parse_let(
+  head_start : Cursor,
+  after_head : Cursor,
+) -> Result[(Node, Cursor), String] {
   let name_start = after_head.skip_layout()
   let (name, after_name) = parse_name(name_start)
   if name.is_empty() {
@@ -214,8 +222,8 @@ fn parse_let(after_head : Cursor) -> Result[(Node, Cursor), String] {
   if cursor.peek() != Some(')') {
     return Err(after_head.error("unterminated let"))
   }
-  let value = nodes_to_value(values)
-  Ok((Node::Let(name, value), cursor.advance(1)))
+  let value = nodes_to_value_at(values, after_name.skip_layout().source_span())
+  Ok((Node::Let(name, value, head_start.source_span()), cursor.advance(1)))
 }
 
 ///|
@@ -252,30 +260,38 @@ fn contains_string(items : Array[String], target : String) -> Bool {
 
 ///|
 fn nodes_to_value(nodes : Array[Node]) -> Value {
+  nodes_to_value_at(nodes, nodes[0].span())
+}
+
+///|
+fn nodes_to_value_at(nodes : Array[Node], span : SourceSpan) -> Value {
   if nodes.length() == 1 {
     match nodes[0] {
-      Text(text) => scalar_or_bool(text)
-      TextInterp(text) => Value::Interp(text)
-      _ => Value::Fragment(nodes)
+      Text(text, text_span) => scalar_or_bool(text, text_span)
+      TextInterp(text, text_span) => Value::Interp(text, text_span)
+      _ => Value::Fragment(nodes, span)
     }
   } else {
-    Value::Fragment(nodes)
+    Value::Fragment(nodes, span)
   }
 }
 
 ///|
-fn scalar_or_bool(text : String) -> Value {
+fn scalar_or_bool(text : String, span : SourceSpan) -> Value {
   if text == "true" {
-    Bool(true)
+    Bool(true, span)
   } else if text == "false" {
-    Bool(false)
+    Bool(false, span)
   } else {
-    Scalar(text)
+    Scalar(text, span)
   }
 }
 
 ///|
-fn parse_meta(after_head : Cursor) -> Result[(Node, Cursor), String] {
+fn parse_meta(
+  head_start : Cursor,
+  after_head : Cursor,
+) -> Result[(Node, Cursor), String] {
   let cursor = after_head.skip_layout()
   match cursor.peek() {
     Some('(') =>
@@ -283,7 +299,7 @@ fn parse_meta(after_head : Cursor) -> Result[(Node, Cursor), String] {
         let (attrs, next) = result
         let end = next.skip_layout()
         if end.peek() == Some(')') {
-          Ok((Node::Meta(attrs), end.advance(1)))
+          Ok((Node::Meta(attrs, head_start.source_span()), end.advance(1)))
         } else {
           Err(end.error("meta only accepts an attribute list"))
         }
@@ -293,9 +309,12 @@ fn parse_meta(after_head : Cursor) -> Result[(Node, Cursor), String] {
 }
 
 ///|
-fn parse_html_head(after_head : Cursor) -> Result[(Node, Cursor), String] {
+fn parse_html_head(
+  head_start : Cursor,
+  after_head : Cursor,
+) -> Result[(Node, Cursor), String] {
   let mut cursor = after_head.skip_layout()
-  let attrs : Array[(String, Value?)] = []
+  let attrs : Array[Attr] = []
   if cursor.peek() == Some('(') && peek_attr_list(cursor) {
     match parse_attr_list(cursor) {
       Ok((parsed_attrs, next)) => {
@@ -309,12 +328,14 @@ fn parse_html_head(after_head : Cursor) -> Result[(Node, Cursor), String] {
   }
   match parse_nodes(cursor, Some(')')) {
     Err(error) => Err(error)
-    Ok((children, next)) => Ok((Node::HtmlHead(attrs, children), next))
+    Ok((children, next)) =>
+      Ok((Node::HtmlHead(attrs, children, head_start.source_span()), next))
   }
 }
 
 ///|
 fn parse_conditional(
+  head_start : Cursor,
   after_head : Cursor,
   is_when : Bool,
 ) -> Result[(Node, Cursor), String] {
@@ -326,9 +347,9 @@ fn parse_conditional(
         Err(error) => Err(error)
         Ok((children, next)) =>
           if is_when {
-            Ok((Node::When(name, children), next))
+            Ok((Node::When(name, children, head_start.source_span()), next))
           } else {
-            Ok((Node::Unless(name, children), next))
+            Ok((Node::Unless(name, children, head_start.source_span()), next))
           }
       }
   }
@@ -351,10 +372,11 @@ fn parse_condition_ref(cursor : Cursor) -> Result[(String, Cursor), String] {
 ///|
 fn parse_element_or_ref(
   tag : String,
+  head_start : Cursor,
   after_head : Cursor,
 ) -> Result[(Node, Cursor), String] {
   let mut cursor = after_head.skip_layout()
-  let attrs : Array[(String, Value?)] = []
+  let attrs : Array[Attr] = []
   if cursor.peek() == Some('(') {
     match peek_attr_list(cursor) {
       true =>
@@ -374,9 +396,11 @@ fn parse_element_or_ref(
     Err(error) => Err(error)
     Ok((children, next)) =>
       if attrs.is_empty() && children.is_empty() {
-        Ok((Node::Ref(tag), next))
+        Ok((Node::Ref(tag, head_start.source_span()), next))
       } else {
-        Ok((Node::Element(tag, attrs, children), next))
+        Ok(
+          (Node::Element(tag, attrs, children, head_start.source_span()), next),
+        )
       }
   }
 }
@@ -387,10 +411,8 @@ fn peek_attr_list(cursor : Cursor) -> Bool {
 }
 
 ///|
-fn parse_attr_list(
-  open : Cursor,
-) -> Result[(Array[(String, Value?)], Cursor), String] {
-  let attrs : Array[(String, Value?)] = []
+fn parse_attr_list(open : Cursor) -> Result[(Array[Attr], Cursor), String] {
+  let attrs : Array[Attr] = []
   let mut cursor = open.advance(1).skip_layout()
   while !cursor.is_end() {
     cursor = cursor.skip_layout()
@@ -404,17 +426,21 @@ fn parse_attr_list(
         let value_start = after_name.skip_layout()
         match value_start.peek() {
           Some(')') => {
-            attrs.push((name, None))
+            attrs.push({ name, value: None, span: cursor.source_span() })
             cursor = value_start
           }
           Some(':') => {
-            attrs.push((name, None))
+            attrs.push({ name, value: None, span: cursor.source_span() })
             cursor = value_start
           }
           _ =>
             match parse_value(value_start) {
               Ok((value, next)) => {
-                attrs.push((name, Some(value)))
+                attrs.push({
+                  name,
+                  value: Some(value),
+                  span: cursor.source_span(),
+                })
                 cursor = next
               }
               Err(error) => return Err(error)
@@ -432,11 +458,11 @@ fn parse_value(cursor : Cursor) -> Result[(Value, Cursor), String] {
   match cursor.peek() {
     Some('`') =>
       parse_raw_string(cursor).map(fn(result) {
-        (Value::Scalar(result.0), result.1)
+        (Value::Scalar(result.0, cursor.source_span()), result.1)
       })
     Some('"') =>
       parse_quoted_string(cursor).map(fn(result) {
-        (Value::Interp(result.0), result.1)
+        (Value::Interp(result.0, cursor.source_span()), result.1)
       })
     Some('(') => parse_value_ref(cursor)
     _ => {
@@ -444,7 +470,7 @@ fn parse_value(cursor : Cursor) -> Result[(Value, Cursor), String] {
       if name.is_empty() {
         Err(cursor.error("expected value"))
       } else {
-        Ok((scalar_or_bool(name), next))
+        Ok((scalar_or_bool(name, cursor.source_span()), next))
       }
     }
   }
@@ -459,7 +485,7 @@ fn parse_value_ref(cursor : Cursor) -> Result[(Value, Cursor), String] {
       cursor.error("attribute value only accepts zero-argument name references"),
     )
   } else {
-    Ok((Value::Interp("(" + name + ")"), end.advance(1)))
+    Ok((Value::Interp("(" + name + ")", cursor.source_span()), end.advance(1)))
   }
 }
 
@@ -579,11 +605,27 @@ fn parse_text(cursor : Cursor) -> (String, Cursor) {
 fn parse_emphasis_or_text(cursor : Cursor) -> Result[(Node, Cursor), String] {
   if cursor.starts_with("**") {
     capture_until(cursor.advance(2), "**").map(fn(result) {
-      (Node::Element("strong", [], [Node::Text(result.0)]), result.1)
+      (
+        Node::Element(
+          "strong",
+          [],
+          [Node::Text(result.0, cursor.advance(2).source_span())],
+          cursor.source_span(),
+        ),
+        result.1,
+      )
     })
   } else {
     capture_until(cursor.advance(1), "*").map(fn(result) {
-      (Node::Element("em", [], [Node::Text(result.0)]), result.1)
+      (
+        Node::Element(
+          "em",
+          [],
+          [Node::Text(result.0, cursor.advance(1).source_span())],
+          cursor.source_span(),
+        ),
+        result.1,
+      )
     })
   }
 }
@@ -631,7 +673,8 @@ fn parse_list_sugar(cursor : Cursor) -> Result[(Node, Cursor), String] {
     let (line, column) = scan.at(item_start).line_column()
     let parsed_line = parse_altsia_at(item_text, line - 1, column - 1)
     match parsed_line {
-      Ok(children) => items.push(Node::Element("item", [], children))
+      Ok(children) =>
+        items.push(Node::Element("item", [], children, scan.source_span()))
       Err(error) => return Err(error)
     }
     scan = scan.at(line_end)
@@ -639,7 +682,7 @@ fn parse_list_sugar(cursor : Cursor) -> Result[(Node, Cursor), String] {
       scan = scan.advance(1)
     }
   }
-  Ok((Node::Element(tag, [], items), scan))
+  Ok((Node::Element(tag, [], items, cursor.source_span()), scan))
 }
 
 ///|
@@ -651,11 +694,20 @@ fn maybe_attach_block_quote(node : Node, cursor : Cursor) -> (Node, Cursor) {
   match parse_block_quote(candidate) {
     Ok((content, next)) =>
       match node {
-        Element(tag, attrs, children) => {
-          children.push(Node::Text(content))
-          (Node::Element(tag, attrs, children), next)
+        Element(tag, attrs, children, span) => {
+          children.push(Node::Text(content, candidate.source_span()))
+          (Node::Element(tag, attrs, children, span), next)
         }
-        Ref(name) => (Node::Element(name, [], [Node::Text(content)]), next)
+        Ref(name, span) =>
+          (
+            Node::Element(
+              name,
+              [],
+              [Node::Text(content, candidate.source_span())],
+              span,
+            ),
+            next,
+          )
         _ => (node, cursor)
       }
     Err(_) => (node, cursor)
