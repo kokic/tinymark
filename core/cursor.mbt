@@ -55,15 +55,8 @@ fn Cursor::at(self : Cursor, index : Int) -> Cursor {
 }
 
 ///|
-fn Cursor::error(self : Cursor, message : String) -> String {
-  let span = self.source_span()
-  let lineno_spaces = repeat_string(" ", span.line.to_string().length())
-  let column_spaces = repeat_string(" ", span.marker_column - 1)
-  (
-    $|parse error at line \{span.line.to_string()}, column \{span.column.to_string()}: \{message}
-    $|\{span.line.to_string()} | \{span.line_text}
-    $|\{lineno_spaces} | \{column_spaces}^
-  )
+fn Cursor::error(self : Cursor, message : String) -> Diagnostic {
+  self.source_span().diagnostic(DiagnosticPhase::Syntax, message)
 }
 
 ///|

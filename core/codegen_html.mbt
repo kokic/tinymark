@@ -32,12 +32,14 @@ pub fn HtmlDocumentOptions::empty() -> HtmlDocumentOptions {
 }
 
 ///|
-pub fn altsia_to_sexp_nodes(source : String) -> Result[Array[HtmlNode], String] {
+pub fn altsia_to_sexp_nodes(
+  source : String,
+) -> Result[Array[HtmlNode], Diagnostic] {
   parse_altsia(source).bind(compile_document)
 }
 
 ///|
-pub fn altsia_to_html(source : String) -> Result[String, String] {
+pub fn altsia_to_html(source : String) -> Result[String, Diagnostic] {
   altsia_to_sexp_nodes(source).map(@sexp.render_html)
 }
 
@@ -45,7 +47,7 @@ pub fn altsia_to_html(source : String) -> Result[String, String] {
 pub fn altsia_to_html_document(
   source : String,
   options? : HtmlDocumentOptions,
-) -> Result[String, String] {
+) -> Result[String, Diagnostic] {
   let document_options = match options {
     Some(value) => value
     None => HtmlDocumentOptions::default()
@@ -56,7 +58,7 @@ pub fn altsia_to_html_document(
 }
 
 ///|
-fn compile_document(nodes : Array[Node]) -> Result[Array[HtmlNode], String] {
+fn compile_document(nodes : Array[Node]) -> Result[Array[HtmlNode], Diagnostic] {
   let env : Array[Binding] = []
   compile_node_sequence(nodes, env, 1, true, true)
 }
@@ -65,7 +67,7 @@ fn compile_document(nodes : Array[Node]) -> Result[Array[HtmlNode], String] {
 fn compile_html_document(
   nodes : Array[Node],
   options : HtmlDocumentOptions,
-) -> Result[String, String] {
+) -> Result[String, Diagnostic] {
   let env : Array[Binding] = []
   let meta_attrs : Array[Attr] = []
   let explicit_head : Array[HtmlNode] = []
@@ -178,7 +180,7 @@ fn render_open_tag(tag : String, attrs : Array[(String, String?)]) -> String {
 fn html_document_attrs(
   meta_attrs : Array[Attr],
   env : Array[Binding],
-) -> Result[Array[(String, String?)], String] {
+) -> Result[Array[(String, String?)], Diagnostic] {
   let attrs : Array[(String, String?)] = []
   for attr in meta_attrs {
     if attr.name == "lang" {
@@ -201,7 +203,7 @@ fn html_head_nodes(
   explicit_head : Array[HtmlNode],
   env : Array[Binding],
   options : HtmlDocumentOptions,
-) -> Result[Array[HtmlNode], String] {
+) -> Result[Array[HtmlNode], Diagnostic] {
   let head : Array[HtmlNode] = []
   match meta_scalar_or_default(meta_attrs, "charset", options.charset, env) {
     Ok(Some(text)) =>
@@ -230,7 +232,7 @@ fn push_optional_head_meta(
   head : Array[HtmlNode],
   meta_attrs : Array[Attr],
   env : Array[Binding],
-) -> Result[Unit, String] {
+) -> Result[Unit, Diagnostic] {
   push_optional_meta_node(head, meta_attrs, "title", env, text => {
     HtmlNode::Element("title", [], [HtmlNode::Text(text)])
   })
@@ -253,7 +255,7 @@ fn push_optional_meta_node(
   name : String,
   env : Array[Binding],
   make_node : (String) -> HtmlNode,
-) -> Result[Unit, String] {
+) -> Result[Unit, Diagnostic] {
   match meta_scalar(meta_attrs, name, env) {
     Ok(Some(text)) => {
       head.push(make_node(text))
@@ -270,7 +272,7 @@ fn meta_scalar_or_default(
   key : String,
   default : String?,
   env : Array[Binding],
-) -> Result[String?, String] {
+) -> Result[String?, Diagnostic] {
   match meta_scalar(meta_attrs, key, env) {
     Ok(Some(text)) => Ok(Some(text))
     Ok(None) => Ok(default)
@@ -283,7 +285,7 @@ fn meta_scalar(
   meta_attrs : Array[Attr],
   key : String,
   env : Array[Binding],
-) -> Result[String?, String] {
+) -> Result[String?, Diagnostic] {
   let mut found : String? = None
   for attr in meta_attrs {
     if attr.name == key {
@@ -342,7 +344,7 @@ fn compile_node_sequence(
   heading_level : Int,
   wrap_paragraphs : Bool,
   allow_html_head : Bool,
-) -> Result[Array[HtmlNode], String] {
+) -> Result[Array[HtmlNode], Diagnostic] {
   let out : Array[HtmlNode] = []
   let inline_run : Array[HtmlNode] = []
   let local_env = clone_env(env)
@@ -375,7 +377,7 @@ fn compile_inline_children(
   children : Array[Node],
   env : Array[Binding],
   heading_level : Int,
-) -> Result[Array[HtmlNode], String] {
+) -> Result[Array[HtmlNode], Diagnostic] {
   compile_node_sequence(children, env, heading_level, false, false)
 }
 
@@ -384,7 +386,7 @@ fn compile_block_children(
   children : Array[Node],
   env : Array[Binding],
   heading_level : Int,
-) -> Result[Array[HtmlNode], String] {
+) -> Result[Array[HtmlNode], Diagnostic] {
   compile_node_sequence(children, env, heading_level, true, false)
 }
 
@@ -393,7 +395,7 @@ fn compile_mixed_children(
   children : Array[Node],
   env : Array[Binding],
   heading_level : Int,
-) -> Result[Array[HtmlNode], String] {
+) -> Result[Array[HtmlNode], Diagnostic] {
   compile_node_sequence(
     children,
     env,
@@ -419,7 +421,7 @@ fn compile_node(
   env : Array[Binding],
   heading_level : Int,
   allow_html_head : Bool,
-) -> Result[Array[HtmlNode], String] {
+) -> Result[Array[HtmlNode], Diagnostic] {
   match node {
     Text(text, _) => Ok([HtmlNode::Text(text)])
     TextInterp(text, span) =>
@@ -444,7 +446,12 @@ fn compile_node(
       if allow_html_head {
         Ok([])
       } else {
-        Err(span.error("html.head is only allowed at document top level"))
+        Err(
+          span.diagnostic(
+            DiagnosticPhase::Placement,
+            "html.head is only allowed at document top level",
+          ),
+        )
       }
     When(name, children, span) =>
       match bool_binding(env, name, span) {
@@ -469,7 +476,7 @@ fn compile_element(
   children : Array[Node],
   env : Array[Binding],
   heading_level : Int,
-) -> Result[Array[HtmlNode], String] {
+) -> Result[Array[HtmlNode], Diagnostic] {
   match tag {
     "_" => compile_inline_children(children, env, heading_level)
     "section" => compile_section(attrs, children, env, heading_level)
@@ -495,7 +502,7 @@ fn compile_mapped_element(
   children : Array[Node],
   env : Array[Binding],
   heading_level : Int,
-) -> Result[Array[HtmlNode], String] {
+) -> Result[Array[HtmlNode], Diagnostic] {
   compile_attrs(attrs, env).bind(fn(html_attrs) {
     compile_children_for_tag(tag, children, env, heading_level).map(fn(
       html_children,
@@ -511,7 +518,7 @@ fn compile_children_for_tag(
   children : Array[Node],
   env : Array[Binding],
   heading_level : Int,
-) -> Result[Array[HtmlNode], String] {
+) -> Result[Array[HtmlNode], Diagnostic] {
   match content_model(tag) {
     InlineOnly => compile_inline_children(children, env, heading_level)
     BlockFlow => compile_block_children(children, env, heading_level)
@@ -604,7 +611,7 @@ fn compile_section(
   children : Array[Node],
   env : Array[Binding],
   heading_level : Int,
-) -> Result[Array[HtmlNode], String] {
+) -> Result[Array[HtmlNode], Diagnostic] {
   let html_attrs : Array[(String, String?)] = []
   let section_children : Array[HtmlNode] = []
   let mut title : String? = None
@@ -650,7 +657,7 @@ fn compile_admonition(
   children : Array[Node],
   env : Array[Binding],
   heading_level : Int,
-) -> Result[Array[HtmlNode], String] {
+) -> Result[Array[HtmlNode], Diagnostic] {
   let html_attrs = match compile_attrs(attrs, env) {
     Ok(value) => value
     Err(error) => return Err(error)
@@ -670,7 +677,7 @@ fn compile_code(
   children : Array[Node],
   env : Array[Binding],
   heading_level : Int,
-) -> Result[Array[HtmlNode], String] {
+) -> Result[Array[HtmlNode], Diagnostic] {
   let html_attrs = match compile_attrs(attrs, env) {
     Ok(value) => value
     Err(error) => return Err(error)
@@ -704,7 +711,7 @@ fn compile_slot(
   children : Array[Node],
   env : Array[Binding],
   heading_level : Int,
-) -> Result[Array[HtmlNode], String] {
+) -> Result[Array[HtmlNode], Diagnostic] {
   let html_attrs = match compile_attrs(attrs, env) {
     Ok(value) => value
     Err(error) => return Err(error)
@@ -724,7 +731,7 @@ fn expand_template(
   call_env : Array[Binding],
   heading_level : Int,
   call_span : SourceSpan,
-) -> Result[Array[HtmlNode], String] {
+) -> Result[Array[HtmlNode], Diagnostic] {
   let values : Array[Value?] = []
   for _ in template.params {
     values.push(None)
@@ -733,7 +740,10 @@ fn expand_template(
     match attr.value {
       None =>
         return Err(
-          attr.span.error("template argument requires a value: " + attr.name),
+          attr.span.diagnostic(
+            DiagnosticPhase::Template,
+            "template argument requires a value: " + attr.name,
+          ),
         )
       Some(value) =>
         match param_index(template.params, attr.name) {
@@ -741,13 +751,19 @@ fn expand_template(
             match values[index] {
               Some(_) =>
                 return Err(
-                  attr.span.error("duplicate template argument: " + attr.name),
+                  attr.span.diagnostic(
+                    DiagnosticPhase::Template,
+                    "duplicate template argument: " + attr.name,
+                  ),
                 )
               None => values[index] = Some(value)
             }
           None =>
             return Err(
-              attr.span.error("unknown template argument: " + attr.name),
+              attr.span.diagnostic(
+                DiagnosticPhase::Template,
+                "unknown template argument: " + attr.name,
+              ),
             )
         }
     }
@@ -763,7 +779,11 @@ fn expand_template(
       }
     }
     if next_param >= values.length() {
-      return Err(arg.span().error("too many template arguments"))
+      return Err(
+        arg
+        .span()
+        .diagnostic(DiagnosticPhase::Template, "too many template arguments"),
+      )
     }
     values[next_param] = Some(arg)
     next_param += 1
@@ -775,7 +795,8 @@ fn expand_template(
       Some(value) => bind_value(template_env, template.params[index], value)
       None =>
         return Err(
-          call_span.error(
+          call_span.diagnostic(
+            DiagnosticPhase::Template,
             "missing template argument: " + template.params[index],
           ),
         )
@@ -825,7 +846,7 @@ fn plain_text(
   children : Array[Node],
   env : Array[Binding],
   heading_level : Int,
-) -> Result[String, String] {
+) -> Result[String, Diagnostic] {
   let parts : Array[String] = []
   let local_env = clone_env(env)
   prebind_direct_templates(local_env, children)
@@ -845,7 +866,15 @@ fn plain_text(
         for node in nodes {
           match node {
             HtmlNode::Text(text) => parts.push(text)
-            _ => return Err(child.span().error("expected plain text content"))
+            _ =>
+              return Err(
+                child
+                .span()
+                .diagnostic(
+                  DiagnosticPhase::ContentModel,
+                  "expected plain text content",
+                ),
+              )
           }
         }
       }
@@ -858,7 +887,7 @@ fn plain_text(
 fn compile_attrs(
   attrs : Array[Attr],
   env : Array[Binding],
-) -> Result[Array[(String, String?)], String] {
+) -> Result[Array[(String, String?)], Diagnostic] {
   let html_attrs : Array[(String, String?)] = []
   for attr in attrs {
     match compile_attr_value(attr.value, env) {
@@ -873,7 +902,7 @@ fn compile_attrs(
 fn compile_attr_value(
   value : Value?,
   env : Array[Binding],
-) -> Result[String?, String] {
+) -> Result[String?, Diagnostic] {
   match value {
     None => Ok(None)
     Some(v) => value_to_scalar(v, env).map(fn(text) { Some(text) })
@@ -884,13 +913,18 @@ fn compile_attr_value(
 fn value_to_scalar(
   value : Value,
   env : Array[Binding],
-) -> Result[String, String] {
+) -> Result[String, Diagnostic] {
   match value {
     Scalar(text, _) => Ok(text)
     Bool(value, _) => Ok(if value { "true" } else { "false" })
     Interp(template, span) => interpolate(template, env, span)
     Fragment(_, span) =>
-      Err(span.error("expected scalar value, but got rich content"))
+      Err(
+        span.diagnostic(
+          DiagnosticPhase::Type,
+          "expected scalar value, but got rich content",
+        ),
+      )
   }
 }
 
@@ -899,7 +933,7 @@ fn value_to_nodes(
   value : Value,
   env : Array[Binding],
   heading_level : Int,
-) -> Result[Array[HtmlNode], String] {
+) -> Result[Array[HtmlNode], Diagnostic] {
   match value {
     Scalar(text, _) => Ok([HtmlNode::Text(text)])
     Bool(value, _) => Ok([HtmlNode::Text(if value { "true" } else { "false" })])
@@ -914,7 +948,7 @@ fn interpolate(
   template : String,
   env : Array[Binding],
   span : SourceSpan,
-) -> Result[String, String] {
+) -> Result[String, Diagnostic] {
   let chars = template.to_array()
   let parts : Array[String] = []
   let mut index = 0
@@ -925,7 +959,9 @@ fn interpolate(
         end += 1
       }
       if end >= chars.length() {
-        return Err(span.error("unterminated interpolation"))
+        return Err(
+          span.diagnostic(DiagnosticPhase::Syntax, "unterminated interpolation"),
+        )
       }
       let name = String::from_array(chars.view(start=index + 1, end~))
       match lookup_value(env, name) {
@@ -934,7 +970,13 @@ fn interpolate(
             Ok(text) => parts.push(text)
             Err(error) => return Err(error)
           }
-        None => return Err(span.error("unbound interpolation name: " + name))
+        None =>
+          return Err(
+            span.diagnostic(
+              DiagnosticPhase::Binding,
+              "unbound interpolation name: " + name,
+            ),
+          )
       }
       index = end + 1
     } else {
@@ -953,13 +995,25 @@ fn bool_binding(
   env : Array[Binding],
   name : String,
   span : SourceSpan,
-) -> Result[Bool, String] {
+) -> Result[Bool, Diagnostic] {
   match lookup_value(env, name) {
     Some(Bool(value, _)) => Ok(value)
     Some(Scalar("true", _)) => Ok(true)
     Some(Scalar("false", _)) => Ok(false)
-    Some(_) => Err(span.error("condition is not a boolean binding: " + name))
-    None => Err(span.error("unbound condition name: " + name))
+    Some(_) =>
+      Err(
+        span.diagnostic(
+          DiagnosticPhase::Type,
+          "condition is not a boolean binding: " + name,
+        ),
+      )
+    None =>
+      Err(
+        span.diagnostic(
+          DiagnosticPhase::Binding,
+          "unbound condition name: " + name,
+        ),
+      )
   }
 }
 

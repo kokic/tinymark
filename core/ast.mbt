@@ -7,22 +7,68 @@ pub(all) struct SourceSpan {
 }
 
 ///|
-fn SourceSpan::error(self : SourceSpan, message : String) -> String {
-  "compile error at line " +
-  self.line.to_string() +
-  ", column " +
-  self.column.to_string() +
-  ": " +
-  message +
-  "\n" +
-  self.line.to_string() +
-  " | " +
-  self.line_text +
-  "\n" +
-  repeat_string(" ", self.line.to_string().length()) +
-  " | " +
-  repeat_string(" ", self.marker_column - 1) +
-  "^"
+pub(all) enum DiagnosticPhase {
+  Syntax
+  Template
+  Binding
+  Type
+  ContentModel
+  Placement
+}
+
+///|
+pub(all) struct Diagnostic {
+  phase : DiagnosticPhase
+  message : String
+  span : SourceSpan
+  hint : String?
+}
+
+///|
+fn DiagnosticPhase::label(self : DiagnosticPhase) -> String {
+  match self {
+    Syntax => "syntax"
+    Template => "template"
+    Binding => "binding"
+    Type => "type"
+    ContentModel => "content model"
+    Placement => "placement"
+  }
+}
+
+///|
+fn SourceSpan::diagnostic(
+  self : SourceSpan,
+  phase : DiagnosticPhase,
+  message : String,
+  hint? : String,
+) -> Diagnostic {
+  { phase, message, span: self, hint }
+}
+
+///|
+pub fn Diagnostic::render(self : Diagnostic) -> String {
+  let span = self.span
+  let rendered = self.phase.label() +
+    " error at line " +
+    span.line.to_string() +
+    ", column " +
+    span.column.to_string() +
+    ": " +
+    self.message +
+    "\n" +
+    span.line.to_string() +
+    " | " +
+    span.line_text +
+    "\n" +
+    repeat_string(" ", span.line.to_string().length()) +
+    " | " +
+    repeat_string(" ", span.marker_column - 1) +
+    "^"
+  match self.hint {
+    Some(hint) => rendered + "\nhint: " + hint
+    None => rendered
+  }
 }
 
 ///|

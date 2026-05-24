@@ -41,7 +41,7 @@ fn main {
   let html = match compiled {
     Ok(value) => value
     Err(error) => {
-      println(error)
+      println(error.render())
       return
     }
   }

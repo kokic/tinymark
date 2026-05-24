@@ -31,7 +31,7 @@ fn skip_attach_space(cursor : Cursor) -> (Cursor, Bool) {
 }
 
 ///|
-pub fn parse_altsia(source : String) -> Result[Array[Node], String] {
+pub fn parse_altsia(source : String) -> Result[Array[Node], Diagnostic] {
   parse_nodes(Cursor::new(source), None).map(fn(result) { result.0 })
 }
 
@@ -40,7 +40,7 @@ fn parse_altsia_at(
   source : String,
   line_offset : Int,
   column_offset : Int,
-) -> Result[Array[Node], String] {
+) -> Result[Array[Node], Diagnostic] {
   parse_nodes(Cursor::new_at(source, line_offset, column_offset), None).map(fn(
     result,
   ) {
@@ -52,7 +52,7 @@ fn parse_altsia_at(
 fn parse_nodes(
   start : Cursor,
   close : Char?,
-) -> Result[(Array[Node], Cursor), String] {
+) -> Result[(Array[Node], Cursor), Diagnostic] {
   let nodes : Array[Node] = []
   let mut cursor = skip_content_layout(start, close, true)
   while !cursor.is_end() {
@@ -81,7 +81,7 @@ fn parse_nodes(
 }
 
 ///|
-fn parse_node(cursor : Cursor) -> Result[(Node, Cursor), String] {
+fn parse_node(cursor : Cursor) -> Result[(Node, Cursor), Diagnostic] {
   let start = cursor
   if start.starts_with(";;") {
     return parse_node(skip_content_layout(skip_line_comment(start), None, true))
@@ -144,7 +144,7 @@ fn skip_content_layout(
 }
 
 ///|
-fn parse_list(open : Cursor) -> Result[(Node, Cursor), String] {
+fn parse_list(open : Cursor) -> Result[(Node, Cursor), Diagnostic] {
   let head_start = open.advance(1).skip_layout()
   let (head, after_head) = parse_name(head_start)
   if head.is_empty() {
@@ -165,7 +165,7 @@ fn parse_list(open : Cursor) -> Result[(Node, Cursor), String] {
 fn parse_def(
   head_start : Cursor,
   after_head : Cursor,
-) -> Result[(Node, Cursor), String] {
+) -> Result[(Node, Cursor), Diagnostic] {
   let name_start = after_head.skip_layout()
   let (name, after_name) = parse_name(name_start)
   if name.is_empty() {
@@ -202,7 +202,7 @@ fn parse_def(
 fn parse_let(
   head_start : Cursor,
   after_head : Cursor,
-) -> Result[(Node, Cursor), String] {
+) -> Result[(Node, Cursor), Diagnostic] {
   let name_start = after_head.skip_layout()
   let (name, after_name) = parse_name(name_start)
   if name.is_empty() {
@@ -227,7 +227,9 @@ fn parse_let(
 }
 
 ///|
-fn parse_param_list(open : Cursor) -> Result[(Array[String], Cursor), String] {
+fn parse_param_list(
+  open : Cursor,
+) -> Result[(Array[String], Cursor), Diagnostic] {
   let params : Array[String] = []
   let mut cursor = open.advance(1).skip_layout()
   while !cursor.is_end() && cursor.peek() != Some(')') {
@@ -291,7 +293,7 @@ fn scalar_or_bool(text : String, span : SourceSpan) -> Value {
 fn parse_meta(
   head_start : Cursor,
   after_head : Cursor,
-) -> Result[(Node, Cursor), String] {
+) -> Result[(Node, Cursor), Diagnostic] {
   let cursor = after_head.skip_layout()
   match cursor.peek() {
     Some('(') =>
@@ -312,7 +314,7 @@ fn parse_meta(
 fn parse_html_head(
   head_start : Cursor,
   after_head : Cursor,
-) -> Result[(Node, Cursor), String] {
+) -> Result[(Node, Cursor), Diagnostic] {
   let mut cursor = after_head.skip_layout()
   let attrs : Array[Attr] = []
   if cursor.peek() == Some('(') && peek_attr_list(cursor) {
@@ -338,7 +340,7 @@ fn parse_conditional(
   head_start : Cursor,
   after_head : Cursor,
   is_when : Bool,
-) -> Result[(Node, Cursor), String] {
+) -> Result[(Node, Cursor), Diagnostic] {
   let condition_start = after_head.skip_layout()
   match parse_condition_ref(condition_start) {
     Err(error) => Err(error)
@@ -356,7 +358,7 @@ fn parse_conditional(
 }
 
 ///|
-fn parse_condition_ref(cursor : Cursor) -> Result[(String, Cursor), String] {
+fn parse_condition_ref(cursor : Cursor) -> Result[(String, Cursor), Diagnostic] {
   if cursor.peek() != Some('(') {
     return Err(cursor.error("condition must be a zero-argument name reference"))
   }
@@ -374,7 +376,7 @@ fn parse_element_or_ref(
   tag : String,
   head_start : Cursor,
   after_head : Cursor,
-) -> Result[(Node, Cursor), String] {
+) -> Result[(Node, Cursor), Diagnostic] {
   let mut cursor = after_head.skip_layout()
   let attrs : Array[Attr] = []
   if cursor.peek() == Some('(') {
@@ -411,7 +413,7 @@ fn peek_attr_list(cursor : Cursor) -> Bool {
 }
 
 ///|
-fn parse_attr_list(open : Cursor) -> Result[(Array[Attr], Cursor), String] {
+fn parse_attr_list(open : Cursor) -> Result[(Array[Attr], Cursor), Diagnostic] {
   let attrs : Array[Attr] = []
   let mut cursor = open.advance(1).skip_layout()
   while !cursor.is_end() {
@@ -454,7 +456,7 @@ fn parse_attr_list(open : Cursor) -> Result[(Array[Attr], Cursor), String] {
 }
 
 ///|
-fn parse_value(cursor : Cursor) -> Result[(Value, Cursor), String] {
+fn parse_value(cursor : Cursor) -> Result[(Value, Cursor), Diagnostic] {
   match cursor.peek() {
     Some('`') =>
       parse_raw_string(cursor).map(fn(result) {
@@ -477,7 +479,7 @@ fn parse_value(cursor : Cursor) -> Result[(Value, Cursor), String] {
 }
 
 ///|
-fn parse_value_ref(cursor : Cursor) -> Result[(Value, Cursor), String] {
+fn parse_value_ref(cursor : Cursor) -> Result[(Value, Cursor), Diagnostic] {
   let (name, after_name) = parse_name(cursor.advance(1).skip_layout())
   let end = after_name.skip_layout()
   if name.is_empty() || end.peek() != Some(')') {
@@ -508,7 +510,7 @@ fn parse_name(cursor : Cursor) -> (String, Cursor) {
 }
 
 ///|
-fn parse_raw_string(cursor : Cursor) -> Result[(String, Cursor), String] {
+fn parse_raw_string(cursor : Cursor) -> Result[(String, Cursor), Diagnostic] {
   let buffer : Array[Char] = []
   let mut index = cursor.index + 1
   while index < cursor.length() {
@@ -530,7 +532,7 @@ fn parse_raw_string(cursor : Cursor) -> Result[(String, Cursor), String] {
 }
 
 ///|
-fn parse_quoted_string(cursor : Cursor) -> Result[(String, Cursor), String] {
+fn parse_quoted_string(cursor : Cursor) -> Result[(String, Cursor), Diagnostic] {
   let buffer : Array[Char] = []
   let mut index = cursor.index + 1
   while index < cursor.length() {
@@ -602,7 +604,9 @@ fn parse_text(cursor : Cursor) -> (String, Cursor) {
 }
 
 ///|
-fn parse_emphasis_or_text(cursor : Cursor) -> Result[(Node, Cursor), String] {
+fn parse_emphasis_or_text(
+  cursor : Cursor,
+) -> Result[(Node, Cursor), Diagnostic] {
   if cursor.starts_with("**") {
     capture_until(cursor.advance(2), "**").map(fn(result) {
       (
@@ -634,7 +638,7 @@ fn parse_emphasis_or_text(cursor : Cursor) -> Result[(Node, Cursor), String] {
 fn capture_until(
   cursor : Cursor,
   marker : String,
-) -> Result[(String, Cursor), String] {
+) -> Result[(String, Cursor), Diagnostic] {
   let buffer : Array[Char] = []
   let mut scan = cursor
   while !scan.is_end() {
@@ -675,7 +679,7 @@ fn smart_dashes(text : String) -> String {
 }
 
 ///|
-fn parse_list_sugar(cursor : Cursor) -> Result[(Node, Cursor), String] {
+fn parse_list_sugar(cursor : Cursor) -> Result[(Node, Cursor), Diagnostic] {
   let marker = match cursor.peek() {
     Some(ch) => ch
     None => return Err(cursor.error("expected list marker"))
@@ -740,7 +744,7 @@ fn maybe_attach_block_quote(node : Node, cursor : Cursor) -> (Node, Cursor) {
 }
 
 ///|
-fn parse_block_quote(cursor : Cursor) -> Result[(String, Cursor), String] {
+fn parse_block_quote(cursor : Cursor) -> Result[(String, Cursor), Diagnostic] {
   let mut fence_end = cursor.index
   while fence_end < cursor.length() && cursor.char_at(fence_end) != '\n' {
     fence_end += 1

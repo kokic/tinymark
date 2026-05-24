@@ -8,13 +8,13 @@ import {
 // Values
 pub const HTML_IMPORT_KATEX : String = "<!-- Also see: https://katex.org/docs/autorender -->\n<link rel=\"stylesheet\" href=\"https://cdn.jsdelivr.net/npm/katex@0.17.0/dist/katex.min.css\" integrity=\"sha384-vlBdW0r3AcZO/HboRPznQNowvexd3fY8qHOWkBi5q7KGgqJ+F48+DceybYmrVbmB\" crossorigin=\"anonymous\">\n<script defer src=\"https://cdn.jsdelivr.net/npm/katex@0.17.0/dist/katex.min.js\" integrity=\"sha384-AtrdNsnxl/75rvBneBVH7DtOvCxSVahR2zWqle1coBKd8DEmLoviqNeJSx64gNAs\" crossorigin=\"anonymous\"></script>\n<script defer src=\"https://cdn.jsdelivr.net/npm/katex@0.17.0/dist/contrib/auto-render.min.js\" integrity=\"sha384-bjyGPfbij8/NDKJhSGZNP/khQVgtHUE5exjm4Ydllo42FwIgYsdLO2lXGmRBf5Mz\" crossorigin=\"anonymous\"></script>\n\n<!-- Also see: https://github.com/KaTeX/KaTeX/tree/main/contrib/copy-tex -->\n<script src=\"https://cdn.jsdelivr.net/npm/katex@0.17.0/dist/contrib/copy-tex.min.js\" integrity=\"sha384-Pe2JWbaShhSRT0SESJ9XLPeAsi4yrNi7r/CiH0Coq7giBjK5a6Ae7XcybE8rNlQP\" crossorigin=\"anonymous\"></script>\n\n<script>\n  document.addEventListener(\"DOMContentLoaded\", function () {\n    renderMathInElement(document.body, {\n      delimiters: [\n        { left: \"$$\", right: \"$$\", display: true },\n        { left: \"$\", right: \"$\", display: false },\n        { left: \"\\\\(\", right: \"\\\\)\", display: false },\n        { left: \"\\\\[\", right: \"\\\\]\", display: true },\n      ],\n      trust: true,\n      strict: false,\n      throwOnError: false,\n      minRuleThickness: 0.05,\n    });\n  });\n</script>"
 
-pub fn altsia_to_html(String) -> Result[String, String]
+pub fn altsia_to_html(String) -> Result[String, Diagnostic]
 
-pub fn altsia_to_html_document(String, options? : HtmlDocumentOptions) -> Result[String, String]
+pub fn altsia_to_html_document(String, options? : HtmlDocumentOptions) -> Result[String, Diagnostic]
 
-pub fn altsia_to_sexp_nodes(String) -> Result[Array[@sexp-html.SexpNode], String]
+pub fn altsia_to_sexp_nodes(String) -> Result[Array[@sexp-html.SexpNode], Diagnostic]
 
-pub fn parse_altsia(String) -> Result[Array[Node], String]
+pub fn parse_altsia(String) -> Result[Array[Node], Diagnostic]
 
 // Errors
 
@@ -23,6 +23,23 @@ pub(all) struct Attr {
   name : String
   value : Value?
   span : SourceSpan
+}
+
+pub(all) struct Diagnostic {
+  phase : DiagnosticPhase
+  message : String
+  span : SourceSpan
+  hint : String?
+}
+pub fn Diagnostic::render(Self) -> String
+
+pub(all) enum DiagnosticPhase {
+  Syntax
+  Template
+  Binding
+  Type
+  ContentModel
+  Placement
 }
 
 pub(all) struct HtmlDocumentOptions {
