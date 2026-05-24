@@ -218,10 +218,10 @@ fn html_head_nodes(
     Ok(_) => ()
     Err(error) => return Err(error)
   }
-  append_html_nodes(head, explicit_head)
   if options.enable_katex {
     head.push(raw_html_node(HTML_IMPORT_KATEX))
   }
+  append_html_nodes(head, explicit_head)
   Ok(head)
 }
 
