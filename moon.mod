@@ -1,6 +1,6 @@
 name = "kokic/tinymark"
 
-version = "0.1.3"
+version = "0.1.5"
 
 import {
   "kokic/sexp-html@0.2.1",
@@ -15,6 +15,6 @@ license = "AGPL-3.0"
 
 keywords = [ "altsia", "markup", "document", "language" ]
 
-description = ""
+description = "The kernel of altsia markup language"
 
 preferred_target = "native"
