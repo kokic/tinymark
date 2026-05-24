@@ -158,6 +158,24 @@ test "template reports argument errors" {
 }
 
 ///|
+test "parse errors include source location" {
+  let expected =
+    #|parse error at line 2, column 1: unexpected ')'
+    #|2 | )
+    #|  | ^
+  @test.assert_eq(altsia_to_html("first\n)"), Err(expected))
+}
+
+///|
+test "list item parse errors keep original location" {
+  let expected =
+    #|parse error at line 2, column 3: unexpected ')'
+    #|2 | )
+    #|  | ^
+  @test.assert_eq(altsia_to_html("- ok\n- )"), Err(expected))
+}
+
+///|
 test "structural nesting does not wrap table cells in paragraphs" {
   let input = "(table (tbody (tr (td A) (td B))))"
   let expected = "<table><tbody><tr><td>A</td> <td>B</td></tr></tbody></table>"

@@ -36,6 +36,19 @@ pub fn parse_altsia(source : String) -> Result[Array[Node], String] {
 }
 
 ///|
+fn parse_altsia_at(
+  source : String,
+  line_offset : Int,
+  column_offset : Int,
+) -> Result[Array[Node], String] {
+  parse_nodes(Cursor::new_at(source, line_offset, column_offset), None).map(fn(
+    result,
+  ) {
+    result.0
+  })
+}
+
+///|
 fn parse_nodes(
   start : Cursor,
   close : Char?,
@@ -609,11 +622,14 @@ fn parse_list_sugar(cursor : Cursor) -> Result[(Node, Cursor), String] {
     while line_end < scan.length() && scan.char_at(line_end) != '\n' {
       line_end += 1
     }
-    let line = scan
-      .slice_to_string(content_start.index, line_end)
-      .trim()
-      .to_owned()
-    let parsed_line = parse_altsia(line)
+    let (item_start, item_end) = trim_line_bounds(
+      scan,
+      content_start.index,
+      line_end,
+    )
+    let item_text = scan.slice_to_string(item_start, item_end)
+    let (line, column) = scan.at(item_start).line_column()
+    let parsed_line = parse_altsia_at(item_text, line - 1, column - 1)
     match parsed_line {
       Ok(children) => items.push(Node::Element("item", [], children))
       Err(error) => return Err(error)
@@ -686,4 +702,18 @@ fn find_line_end(cursor : Cursor, start : Int) -> Int {
     index += 1
   }
   index
+}
+
+///|
+fn trim_line_bounds(cursor : Cursor, start : Int, end : Int) -> (Int, Int) {
+  let mut trimmed_start = start
+  while trimmed_start < end && cursor.char_at(trimmed_start).is_whitespace() {
+    trimmed_start += 1
+  }
+  let mut trimmed_end = end
+  while trimmed_end > trimmed_start &&
+        cursor.char_at(trimmed_end - 1).is_whitespace() {
+    trimmed_end -= 1
+  }
+  (trimmed_start, trimmed_end)
 }
