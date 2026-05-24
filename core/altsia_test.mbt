@@ -198,7 +198,7 @@ test "compile errors include source location" {
     #|(let label (em hot))
     #|(span (:class (label)) Sale)
   let expected =
-    #|compile error at line 1, column 12: expected scalar value
+    #|compile error at line 1, column 12: expected scalar value, but got rich content
     #|1 | (let label (em hot))
     #|  |            ^
   @test.assert_eq(altsia_to_html(input), Err(expected))

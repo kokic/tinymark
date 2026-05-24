@@ -889,7 +889,7 @@ fn value_to_scalar(
     Scalar(text, _) => Ok(text)
     Bool(value, _) => Ok(if value { "true" } else { "false" })
     Interp(template, span) => interpolate(template, env, span)
-    Fragment(_, span) => Err(span.error("expected scalar value"))
+    Fragment(_, span) => Err(span.error("expected scalar value, but got rich content"))
   }
 }
 
