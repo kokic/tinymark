@@ -598,7 +598,7 @@ fn parse_text(cursor : Cursor) -> (String, Cursor) {
     buffer.push(ch)
     index += 1
   }
-  (String::from_array(buffer.view()), cursor.at(index))
+  (smart_dashes(String::from_array(buffer.view())), cursor.at(index))
 }
 
 ///|
@@ -609,7 +609,7 @@ fn parse_emphasis_or_text(cursor : Cursor) -> Result[(Node, Cursor), String] {
         Node::Element(
           "strong",
           [],
-          [Node::Text(result.0, cursor.advance(2).source_span())],
+          [Node::Text(smart_dashes(result.0), cursor.advance(2).source_span())],
           cursor.source_span(),
         ),
         result.1,
@@ -621,7 +621,7 @@ fn parse_emphasis_or_text(cursor : Cursor) -> Result[(Node, Cursor), String] {
         Node::Element(
           "em",
           [],
-          [Node::Text(result.0, cursor.advance(1).source_span())],
+          [Node::Text(smart_dashes(result.0), cursor.advance(1).source_span())],
           cursor.source_span(),
         ),
         result.1,
@@ -647,6 +647,31 @@ fn capture_until(
     scan = scan.advance(1)
   }
   Err(cursor.error("unterminated inline marker"))
+}
+
+///|
+fn smart_dashes(text : String) -> String {
+  let chars = text.to_array()
+  let out : Array[Char] = []
+  let mut index = 0
+  while index < chars.length() {
+    if index + 2 < chars.length() &&
+      chars[index] == '-' &&
+      chars[index + 1] == '-' &&
+      chars[index + 2] == '-' {
+      out.push('—')
+      index += 3
+    } else if index + 1 < chars.length() &&
+      chars[index] == '-' &&
+      chars[index + 1] == '-' {
+      out.push('–')
+      index += 2
+    } else {
+      out.push(chars[index])
+      index += 1
+    }
+  }
+  String::from_array(out.view())
 }
 
 ///|

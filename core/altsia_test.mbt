@@ -17,6 +17,22 @@ test "preserves spaces around inline sexp" {
 }
 
 ///|
+test "converts smart dashes in text" {
+  @test.assert_eq(
+    altsia_to_html("a -- b --- c *x -- y --- z*"),
+    Ok("<p>a – b — c <em>x – y — z</em></p>"),
+  )
+}
+
+///|
+test "does not convert dashes in raw strings or attributes" {
+  @test.assert_eq(
+    altsia_to_html("(span (:data `a---b--c`) `x---y--z`)"),
+    Ok("<p><span data=\"a---b--c\">x---y--z</span></p>"),
+  )
+}
+
+///|
 test "def references and interpolated attributes" {
   let input = "(let lang `zh`)(let base `/docs`)(p (:class \"doc-(lang)\") (a (:href \"(base)/intro\") \"语言：(lang)\"))"
   let expected = "<p class=\"doc-zh\"><a href=\"/docs/intro\">语言：zh</a></p>"
