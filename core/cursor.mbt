@@ -65,10 +65,12 @@ fn Cursor::error(self : Cursor, message : String) -> String {
   }
   let (line_start, line_end) = self.line_bounds()
   let source_line = self.slice_to_string(line_start, line_end)
+  let lineno_spaces = repeat_string(" ", line.to_string().length())
+  let column_spaces = repeat_string(" ", local_column - 1)
   (
     $|parse error at line \{line.to_string()}, column \{column.to_string()}: \{message}
     $|\{line.to_string()} | \{source_line}
-    $|\{repeat_string(" ", line.to_string().length())} | \{repeat_string(" ", local_column - 1)}^
+    $|\{lineno_spaces} | \{column_spaces}^
   )
 }
 
