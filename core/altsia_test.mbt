@@ -288,11 +288,23 @@ test "list sugar and block quote codeblock" {
 }
 
 ///|
+test "dash tag aliases item" {
+  let input = "(list (- one) (- two))"
+  let expected = "<ul><li>one</li> <li>two</li></ul>"
+  @test.assert_eq(render_html_result(input), Ok(expected))
+  @test.assert_eq(
+    render_html_result(input),
+    render_html_result("(list (item one) (item two))"),
+  )
+}
+
+///|
 test "html document uses altsia meta and explicit html head" {
   let input =
     #|(meta 
     #|  ( :title "Doc" 
-    #|    :lang `zh` 
+    #|    :lang `zh-CN` 
+    #|    :dir `ltr` 
     #|    :description "Desc" 
     #|    :author "Ada"))
     #|(html.head
@@ -301,7 +313,7 @@ test "html document uses altsia meta and explicit html head" {
     #|
     #|Hello (title).
   let expected =
-    #|<html lang="zh">
+    #|<html lang="zh-CN" dir="ltr">
     #|  <head>
     #|    <title>Doc</title>
     #|    <meta name="description" content="Desc">

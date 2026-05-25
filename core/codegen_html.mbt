@@ -183,11 +183,11 @@ fn html_document_attrs(
 ) -> Result[Array[(String, String?)], Diagnostic] {
   let attrs : Array[(String, String?)] = []
   for attr in meta_attrs {
-    if attr.name == "lang" {
+    if is_html_document_attr(attr.name) {
       match attr.value {
         Some(value) =>
           match value_to_scalar(value, env) {
-            Ok(text) => set_attr(attrs, "lang", Some(text))
+            Ok(text) => set_attr(attrs, attr.name, Some(text))
             Err(error) => return Err(error)
           }
         None => ()
@@ -195,6 +195,11 @@ fn html_document_attrs(
     }
   }
   Ok(attrs)
+}
+
+///|
+fn is_html_document_attr(name : String) -> Bool {
+  name == "lang" || name == "dir"
 }
 
 ///|
@@ -440,7 +445,14 @@ fn compile_node(
       match lookup_template(env, tag) {
         Some(template) =>
           expand_template(template, attrs, children, env, heading_level, span)
-        None => compile_element(tag, attrs, children, env, heading_level)
+        None =>
+          compile_element(
+            source_tag_name(tag),
+            attrs,
+            children,
+            env,
+            heading_level,
+          )
       }
     HtmlHead(_, _, span) =>
       if allow_html_head {
@@ -492,6 +504,14 @@ fn compile_element(
     "codeblock" => compile_code(attrs, children, env, heading_level)
     "slot" => compile_slot(attrs, children, env, heading_level)
     _ => compile_mapped_element(tag, attrs, children, env, heading_level)
+  }
+}
+
+///|
+fn source_tag_name(tag : String) -> String {
+  match tag {
+    "-" => "item"
+    _ => tag
   }
 }
 
@@ -585,24 +605,27 @@ fn node_needs_paragraph_context(node : Node, env : Array[Binding]) -> Bool {
 
 ///|
 fn is_source_block_tag(tag : String) -> Bool {
-  tag == "section" ||
-  tag == "list" ||
-  tag == "enum" ||
-  tag == "item" ||
-  tag == "table" ||
-  tag == "thead" ||
-  tag == "tbody" ||
-  tag == "tr" ||
-  tag == "fig" ||
-  tag == "note" ||
-  tag == "warning" ||
-  tag == "tip" ||
-  tag == "codeblock" ||
-  tag == "slot" ||
-  tag == "p" ||
-  tag == "blockquote" ||
-  tag == "hr" ||
-  tag == "block"
+  match source_tag_name(tag) {
+    "section"
+    | "list"
+    | "enum"
+    | "item"
+    | "table"
+    | "thead"
+    | "tbody"
+    | "tr"
+    | "fig"
+    | "note"
+    | "warning"
+    | "tip"
+    | "codeblock"
+    | "slot"
+    | "p"
+    | "blockquote"
+    | "hr"
+    | "block" => true
+    _ => false
+  }
 }
 
 ///|
