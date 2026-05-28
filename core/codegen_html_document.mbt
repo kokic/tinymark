@@ -65,70 +65,7 @@ fn compile_html_document(
     Ok(value) => value
     Err(error) => return Err(error)
   }
-  let document = HtmlNode::Element("html", html_attrs, [
-    HtmlNode::Element("head", [], head),
-    HtmlNode::Element("body", [], body),
-  ])
-  Ok(render_html_document(document, options.doctype))
-}
-
-///|
-fn render_html_document(document : HtmlNode, doctype : String?) -> String {
-  match document {
-    HtmlNode::Element(
-      "html",
-      attrs,
-      [HtmlNode::Element("head", _, head), HtmlNode::Element("body", _, body)]
-    ) => {
-      let lines : Array[String] = []
-      match doctype {
-        Some(value) => lines.push("<!DOCTYPE \{value}>")
-        None => ()
-      }
-      lines.push(render_open_tag("html", attrs))
-      lines.push("  <head>")
-      push_rendered_lines(lines, head, "    ")
-      lines.push("  </head>")
-      lines.push("  <body>")
-      push_rendered_lines(lines, body, "    ")
-      lines.push("  </body>")
-      lines.push("</html>")
-      lines.join("\n")
-    }
-    _ =>
-      render_doctype(doctype) +
-      @sexp.render_html_with([document], render_custom_node)
-  }
-}
-
-///|
-fn push_rendered_lines(
-  lines : Array[String],
-  nodes : Array[HtmlNode],
-  indent : String,
-) -> Unit {
-  for node in nodes {
-    let rendered = @sexp.render_html_with([node], render_custom_node)
-    for line in rendered.split("\n") {
-      if line.length() > 0 {
-        lines.push(indent + line.to_owned())
-      }
-    }
-  }
-}
-
-///|
-fn render_open_tag(tag : String, attrs : Array[(String, String?)]) -> String {
-  let rendered = @sexp.render_html_with(
-    [HtmlNode::Element(tag, attrs, [])],
-    render_custom_node,
-  )
-  let suffix = "</" + tag + ">"
-  if rendered.has_suffix(suffix) {
-    rendered.unsafe_substring(start=0, end=rendered.length() - suffix.length())
-  } else {
-    rendered
-  }
+  Ok(@sexp.render_html_document(html_attrs, head, body, options.doctype))
 }
 
 ///|
@@ -142,7 +79,7 @@ fn html_document_attrs(
       match attr.value {
         Some(value) =>
           match value_to_scalar(value, env) {
-            Ok(text) => set_attr(attrs, attr.name, Some(text))
+            Ok(text) => @sexp.upsert_attr(attrs, attr.name, Some(text))
             Err(error) => return Err(error)
           }
         None => ()
@@ -181,7 +118,7 @@ fn html_head_nodes(
     Err(error) => return Err(error)
   }
   if options.enable_katex {
-    head.push(raw_html_node(HTML_IMPORT_KATEX))
+    head.push(HtmlNode::RawHtml(HTML_IMPORT_KATEX))
   }
   head.append(explicit_head)
   Ok(head)
@@ -263,36 +200,10 @@ fn meta_scalar(
 }
 
 ///|
-fn render_doctype(doctype : String?) -> String {
-  match doctype {
-    Some(value) => "<!DOCTYPE " + value + ">"
-    None => ""
-  }
-}
-
-///|
 fn html_named_meta(name : String, content : String) -> HtmlNode {
   HtmlNode::Element(
     "meta",
     [("name", Some(name)), ("content", Some(content))],
     [],
   )
-}
-
-///|
-fn set_attr(
-  attrs : Array[(String, String?)],
-  name : String,
-  value : String?,
-) -> Unit {
-  for i in 0..<attrs.length() {
-    match attrs[i] {
-      (existing, _) if existing == name => {
-        attrs[i] = (name, value)
-        return
-      }
-      _ => ()
-    }
-  }
-  attrs.push((name, value))
 }

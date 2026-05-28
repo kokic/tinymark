@@ -17,7 +17,7 @@ pub fn altsia_to_sexp_nodes(
 
 ///|
 pub fn altsia_to_html(source : String) -> Result[String, Diagnostic] {
-  altsia_to_sexp_nodes(source).map(@sexp.render_html)
+  altsia_to_sexp_nodes(source).map(nodes => @sexp.render_html(nodes))
 }
 
 ///|
@@ -381,7 +381,7 @@ fn compile_admonition(
     Ok(value) => value
     Err(error) => return Err(error)
   }
-  append_class(html_attrs, kind)
+  @sexp.append_class(html_attrs, kind)
   let html_children = match
     compile_block_children(children, env, heading_level) {
     Ok(value) => value

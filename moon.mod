@@ -3,7 +3,7 @@ name = "kokic/tinymark"
 version = "0.2.0"
 
 import {
-  "kokic/sexp-html@0.2.1",
+  "kokic/sexp-html@0.2.2",
   "moonbitlang/x@0.4.43",
 }
 

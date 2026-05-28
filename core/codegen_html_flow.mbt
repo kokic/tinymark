@@ -102,6 +102,7 @@ fn is_inline_html_node(node : HtmlNode) -> Bool {
   match node {
     HtmlNode::Text(_) => true
     HtmlNode::Comment(_) => false
+    HtmlNode::RawHtml(_) => false
     HtmlNode::Element(tag, _, _) => !is_block_tag(tag)
   }
 }
@@ -125,27 +126,6 @@ fn is_block_tag(tag : String) -> Bool {
     | "blockquote"
     | "hr" => true
     _ => tag.has_prefix("h")
-  }
-}
-
-///|
-fn append_class(attrs : Array[(String, String?)], class_name : String) -> Unit {
-  let mut found = false
-  for i in 0..<attrs.length() {
-    match attrs[i] {
-      ("class", Some(value)) => {
-        attrs[i] = ("class", Some(value + " " + class_name))
-        found = true
-      }
-      ("class", None) => {
-        attrs[i] = ("class", Some(class_name))
-        found = true
-      }
-      _ => ()
-    }
-  }
-  if !found {
-    attrs.push(("class", Some(class_name)))
   }
 }
 
