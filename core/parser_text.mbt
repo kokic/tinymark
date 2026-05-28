@@ -115,7 +115,7 @@ fn parse_emphasis_or_text(
   cursor : Cursor,
 ) -> Result[(Node, Cursor), Diagnostic] {
   if cursor.starts_with("**") {
-    capture_until(cursor.advance(2), "**").map(fn(result) {
+    capture_until(cursor.advance(2), "**").map(result => {
       (
         Node::Element(
           "strong",
@@ -127,7 +127,7 @@ fn parse_emphasis_or_text(
       )
     })
   } else {
-    capture_until(cursor.advance(1), "*").map(fn(result) {
+    capture_until(cursor.advance(1), "*").map(result => {
       (
         Node::Element(
           "em",

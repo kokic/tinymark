@@ -1,6 +1,6 @@
 ///|
 pub fn parse_altsia(source : String) -> Result[Array[Node], Diagnostic] {
-  parse_nodes(Cursor::new(source), None).map(fn(result) { result.0 })
+  parse_nodes(Cursor::new(source), None).map(result => result.0)
 }
 
 ///|
@@ -9,9 +9,7 @@ fn parse_altsia_at(
   line_offset : Int,
   column_offset : Int,
 ) -> Result[Array[Node], Diagnostic] {
-  parse_nodes(Cursor::new_at(source, line_offset, column_offset), None).map(fn(
-    result,
-  ) {
+  parse_nodes(Cursor::new_at(source, line_offset, column_offset), None).map(result => {
     result.0
   })
 }
@@ -62,11 +60,11 @@ fn parse_node(cursor : Cursor) -> Result[(Node, Cursor), Diagnostic] {
     None => Err(start.error("unexpected end of input"))
     Some('(') => parse_list(start)
     Some('`') =>
-      parse_raw_string(start).map(fn(result) {
+      parse_raw_string(start).map(result => {
         (Node::Text(result.0, start.source_span()), result.1)
       })
     Some('"') =>
-      parse_quoted_string(start).map(fn(result) {
+      parse_quoted_string(start).map(result => {
         (Node::TextInterp(result.0, start.source_span()), result.1)
       })
     Some('*') => parse_emphasis_or_text(start)
@@ -217,7 +215,7 @@ fn parse_meta(
   let cursor = after_head.skip_layout()
   match cursor.peek() {
     Some('(') =>
-      parse_attr_list(cursor).bind(fn(result) {
+      parse_attr_list(cursor).bind(result => {
         let (attrs, next) = result
         let end = next.skip_layout()
         if end.peek() == Some(')') {
@@ -245,7 +243,7 @@ fn parse_html_head(
     attrs.append(parsed_attrs)
     cursor = next.skip_layout()
   }
-  parse_nodes(cursor, Some(')')).map(fn(result) {
+  parse_nodes(cursor, Some(')')).map(result => {
     let (children, next) = result
     (Node::HtmlHead(attrs, children, head_start.source_span()), next)
   })
@@ -258,9 +256,9 @@ fn parse_conditional(
   is_when : Bool,
 ) -> Result[(Node, Cursor), Diagnostic] {
   let condition_start = after_head.skip_layout()
-  parse_condition_ref(condition_start).bind(fn(result) {
+  parse_condition_ref(condition_start).bind(result => {
     let (name, after_condition) = result
-    parse_nodes(after_condition, Some(')')).map(fn(result) {
+    parse_nodes(after_condition, Some(')')).map(result => {
       let (children, next) = result
       let node = if is_when {
         Node::When(name, children, head_start.source_span())
@@ -304,7 +302,7 @@ fn parse_element_or_ref(
       cursor = next.skip_layout()
     }
   }
-  parse_nodes(cursor, Some(')')).map(fn(result) {
+  parse_nodes(cursor, Some(')')).map(result => {
     let (children, next) = result
     let node = if attrs.is_empty() && children.is_empty() {
       Node::Ref(tag, head_start.source_span())
@@ -367,11 +365,11 @@ fn parse_attr_list(open : Cursor) -> Result[(Array[Attr], Cursor), Diagnostic] {
 fn parse_value(cursor : Cursor) -> Result[(Value, Cursor), Diagnostic] {
   match cursor.peek() {
     Some('`') =>
-      parse_raw_string(cursor).map(fn(result) {
+      parse_raw_string(cursor).map(result => {
         (Value::Scalar(result.0, cursor.source_span()), result.1)
       })
     Some('"') =>
-      parse_quoted_string(cursor).map(fn(result) {
+      parse_quoted_string(cursor).map(result => {
         (Value::Interp(result.0, cursor.source_span()), result.1)
       })
     Some('(') => parse_value_ref(cursor)

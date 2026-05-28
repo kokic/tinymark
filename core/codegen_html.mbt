@@ -128,7 +128,7 @@ fn compile_node(
   match node {
     Text(text, _) => Ok([HtmlNode::Text(text)])
     TextInterp(text, span) =>
-      interpolate(text, env, span).map(fn(value) { [HtmlNode::Text(value)] })
+      interpolate(text, env, span).map(value => [HtmlNode::Text(value)])
     Ref(name, span) =>
       match lookup_value(env, name) {
         Some(value) => value_to_nodes(value, env, heading_level)
@@ -221,10 +221,8 @@ fn compile_mapped_element(
   env : Array[Binding],
   heading_level : Int,
 ) -> Result[Array[HtmlNode], Diagnostic] {
-  compile_attrs(attrs, env).bind(fn(html_attrs) {
-    compile_children_for_tag(tag, children, env, heading_level).map(fn(
-      html_children,
-    ) {
+  compile_attrs(attrs, env).bind(html_attrs => {
+    compile_children_for_tag(tag, children, env, heading_level).map(html_children => {
       [HtmlNode::Element(tag, html_attrs, html_children)]
     })
   })
@@ -626,7 +624,7 @@ fn compile_attr_value(
 ) -> Result[String?, Diagnostic] {
   match value {
     None => Ok(None)
-    Some(v) => value_to_scalar(v, env).map(fn(text) { Some(text) })
+    Some(v) => value_to_scalar(v, env).map(text => Some(text))
   }
 }
 
@@ -659,7 +657,7 @@ fn value_to_nodes(
     Scalar(text, _) => Ok([HtmlNode::Text(text)])
     Bool(value, _) => Ok([HtmlNode::Text(if value { "true" } else { "false" })])
     Interp(template, span) =>
-      interpolate(template, env, span).map(fn(text) { [HtmlNode::Text(text)] })
+      interpolate(template, env, span).map(text => [HtmlNode::Text(text)])
     Fragment(nodes, _) => compile_inline_children(nodes, env, heading_level)
   }
 }
