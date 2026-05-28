@@ -171,7 +171,7 @@ fn parse_param_list(
     if name.is_empty() {
       return Err(cursor.error("parameter name cannot be empty"))
     }
-    if contains_string(params, name) {
+    if params.contains(name) {
       return Err(cursor.error("duplicate parameter name: " + name))
     }
     params.push(name)
@@ -185,30 +185,16 @@ fn parse_param_list(
 }
 
 ///|
-fn contains_string(items : Array[String], target : String) -> Bool {
-  for item in items {
-    if item == target {
-      return true
-    }
-  }
-  false
-}
-
-///|
 fn nodes_to_value(nodes : Array[Node]) -> Value {
   nodes_to_value_at(nodes, nodes[0].span())
 }
 
 ///|
 fn nodes_to_value_at(nodes : Array[Node], span : SourceSpan) -> Value {
-  if nodes.length() == 1 {
-    match nodes[0] {
-      Text(text, text_span) => scalar_or_bool(text, text_span)
-      TextInterp(text, text_span) => Value::Interp(text, text_span)
-      _ => Value::Fragment(nodes, span)
-    }
-  } else {
-    Value::Fragment(nodes, span)
+  match nodes {
+    [Text(text, text_span)] => scalar_or_bool(text, text_span)
+    [TextInterp(text, text_span)] => Value::Interp(text, text_span)
+    _ => Value::Fragment(nodes, span)
   }
 }
 
@@ -252,21 +238,17 @@ fn parse_html_head(
   let mut cursor = after_head.skip_layout()
   let attrs : Array[Attr] = []
   if cursor.peek() == Some('(') && peek_attr_list(cursor) {
-    match parse_attr_list(cursor) {
-      Ok((parsed_attrs, next)) => {
-        for attr in parsed_attrs {
-          attrs.push(attr)
-        }
-        cursor = next.skip_layout()
-      }
+    let (parsed_attrs, next) = match parse_attr_list(cursor) {
+      Ok(value) => value
       Err(error) => return Err(error)
     }
+    attrs.append(parsed_attrs)
+    cursor = next.skip_layout()
   }
-  match parse_nodes(cursor, Some(')')) {
-    Err(error) => Err(error)
-    Ok((children, next)) =>
-      Ok((Node::HtmlHead(attrs, children, head_start.source_span()), next))
-  }
+  parse_nodes(cursor, Some(')')).map(fn(result) {
+    let (children, next) = result
+    (Node::HtmlHead(attrs, children, head_start.source_span()), next)
+  })
 }
 
 ///|
@@ -276,19 +258,18 @@ fn parse_conditional(
   is_when : Bool,
 ) -> Result[(Node, Cursor), Diagnostic] {
   let condition_start = after_head.skip_layout()
-  match parse_condition_ref(condition_start) {
-    Err(error) => Err(error)
-    Ok((name, after_condition)) =>
-      match parse_nodes(after_condition, Some(')')) {
-        Err(error) => Err(error)
-        Ok((children, next)) =>
-          if is_when {
-            Ok((Node::When(name, children, head_start.source_span()), next))
-          } else {
-            Ok((Node::Unless(name, children, head_start.source_span()), next))
-          }
+  parse_condition_ref(condition_start).bind(fn(result) {
+    let (name, after_condition) = result
+    parse_nodes(after_condition, Some(')')).map(fn(result) {
+      let (children, next) = result
+      let node = if is_when {
+        Node::When(name, children, head_start.source_span())
+      } else {
+        Node::Unless(name, children, head_start.source_span())
       }
-  }
+      (node, next)
+    })
+  })
 }
 
 ///|
@@ -314,31 +295,24 @@ fn parse_element_or_ref(
   let mut cursor = after_head.skip_layout()
   let attrs : Array[Attr] = []
   if cursor.peek() == Some('(') {
-    match peek_attr_list(cursor) {
-      true =>
-        match parse_attr_list(cursor) {
-          Ok((parsed_attrs, next)) => {
-            for attr in parsed_attrs {
-              attrs.push(attr)
-            }
-            cursor = next.skip_layout()
-          }
-          Err(error) => return Err(error)
-        }
-      false => ()
+    if peek_attr_list(cursor) {
+      let (parsed_attrs, next) = match parse_attr_list(cursor) {
+        Ok(value) => value
+        Err(error) => return Err(error)
+      }
+      attrs.append(parsed_attrs)
+      cursor = next.skip_layout()
     }
   }
-  match parse_nodes(cursor, Some(')')) {
-    Err(error) => Err(error)
-    Ok((children, next)) =>
-      if attrs.is_empty() && children.is_empty() {
-        Ok((Node::Ref(tag, head_start.source_span()), next))
-      } else {
-        Ok(
-          (Node::Element(tag, attrs, children, head_start.source_span()), next),
-        )
-      }
-  }
+  parse_nodes(cursor, Some(')')).map(fn(result) {
+    let (children, next) = result
+    let node = if attrs.is_empty() && children.is_empty() {
+      Node::Ref(tag, head_start.source_span())
+    } else {
+      Node::Element(tag, attrs, children, head_start.source_span())
+    }
+    (node, next)
+  })
 }
 
 ///|

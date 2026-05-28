@@ -50,7 +50,7 @@ fn compile_node_sequence(
 ) -> Result[Array[HtmlNode], Diagnostic] {
   let out : Array[HtmlNode] = []
   let inline_run : Array[HtmlNode] = []
-  let local_env = clone_env(env)
+  let local_env = env.copy()
   prebind_direct_templates(local_env, nodes)
   for node in nodes {
     match node {
@@ -258,7 +258,7 @@ fn children_need_paragraphs(
   children : Array[Node],
   env : Array[Binding],
 ) -> Bool {
-  let local_env = clone_env(env)
+  let local_env = env.copy()
   prebind_direct_templates(local_env, children)
   for child in children {
     match child {
@@ -367,7 +367,7 @@ fn compile_section(
     Ok(nodes) => nodes
     Err(error) => return Err(error)
   }
-  append_html_nodes(section_children, compiled)
+  section_children.append(compiled)
   Ok([HtmlNode::Element("section", html_attrs, section_children)])
 }
 
@@ -509,8 +509,8 @@ fn expand_template(
     values[next_param] = Some(arg)
     next_param += 1
   }
-  let template_env = clone_env(call_env)
-  append_bindings(template_env, template.env)
+  let template_env = call_env.copy()
+  template_env.append(template.env)
   for index in 0..<template.params.length() {
     match values[index] {
       Some(value) => bind_value(template_env, template.params[index], value)
@@ -569,7 +569,7 @@ fn plain_text(
   heading_level : Int,
 ) -> Result[String, Diagnostic] {
   let parts : Array[String] = []
-  let local_env = clone_env(env)
+  let local_env = env.copy()
   prebind_direct_templates(local_env, children)
   for child in children {
     match child {

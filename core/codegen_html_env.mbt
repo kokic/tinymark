@@ -44,7 +44,7 @@ fn bind_template(
 ) -> Unit {
   env.push({
     name,
-    value: BindingValue::BoundTemplate({ params, body, env: clone_env(env) }),
+    value: BindingValue::BoundTemplate({ params, body, env: env.copy() }),
   })
 }
 
@@ -53,21 +53,5 @@ fn bind_meta_attr(env : Array[Binding], attr : Attr) -> Unit {
   match attr.value {
     Some(value) => bind_value(env, attr.name, value)
     None => ()
-  }
-}
-
-///|
-fn clone_env(env : Array[Binding]) -> Array[Binding] {
-  let cloned : Array[Binding] = []
-  for binding in env {
-    cloned.push(binding)
-  }
-  cloned
-}
-
-///|
-fn append_bindings(out : Array[Binding], bindings : Array[Binding]) -> Unit {
-  for binding in bindings {
-    out.push(binding)
   }
 }

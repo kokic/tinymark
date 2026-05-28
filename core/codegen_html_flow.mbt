@@ -1,11 +1,4 @@
 ///|
-fn append_html_nodes(out : Array[HtmlNode], nodes : Array[HtmlNode]) -> Unit {
-  for node in nodes {
-    out.push(node)
-  }
-}
-
-///|
 fn append_compiled_node(
   inline_run : Array[HtmlNode],
   out : Array[HtmlNode],
@@ -23,7 +16,7 @@ fn append_compiled_node(
 ///|
 fn flush_paragraph(inline_run : Array[HtmlNode], out : Array[HtmlNode]) -> Unit {
   if !inline_run.is_empty() {
-    out.push(HtmlNode::Element("p", [], clone_html_nodes(inline_run)))
+    out.push(HtmlNode::Element("p", [], inline_run.copy()))
     inline_run.clear()
   }
 }
@@ -105,15 +98,6 @@ fn is_blank_line_space(ch : Char) -> Bool {
 }
 
 ///|
-fn clone_html_nodes(nodes : Array[HtmlNode]) -> Array[HtmlNode] {
-  let cloned : Array[HtmlNode] = []
-  for node in nodes {
-    cloned.push(node)
-  }
-  cloned
-}
-
-///|
 fn is_inline_html_node(node : HtmlNode) -> Bool {
   match node {
     HtmlNode::Text(_) => true
@@ -124,22 +108,24 @@ fn is_inline_html_node(node : HtmlNode) -> Bool {
 
 ///|
 fn is_block_tag(tag : String) -> Bool {
-  tag == "section" ||
-  tag == "ul" ||
-  tag == "ol" ||
-  tag == "li" ||
-  tag == "table" ||
-  tag == "thead" ||
-  tag == "tbody" ||
-  tag == "tr" ||
-  tag == "figure" ||
-  tag == "aside" ||
-  tag == "pre" ||
-  tag == "div" ||
-  tag == "p" ||
-  tag == "blockquote" ||
-  tag == "hr" ||
-  tag.has_prefix("h")
+  match tag {
+    "section"
+    | "ul"
+    | "ol"
+    | "li"
+    | "table"
+    | "thead"
+    | "tbody"
+    | "tr"
+    | "figure"
+    | "aside"
+    | "pre"
+    | "div"
+    | "p"
+    | "blockquote"
+    | "hr" => true
+    _ => tag.has_prefix("h")
+  }
 }
 
 ///|
@@ -165,11 +151,5 @@ fn append_class(attrs : Array[(String, String?)], class_name : String) -> Unit {
 
 ///|
 fn clamp_heading_level(level : Int) -> Int {
-  if level < 1 {
-    1
-  } else if level > 6 {
-    6
-  } else {
-    level
-  }
+  level.clamp(min=1, max=6)
 }

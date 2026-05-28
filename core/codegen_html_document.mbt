@@ -44,10 +44,7 @@ fn compile_html_document(
       HtmlHead(_, children, _) =>
         match compile_node_sequence(children, env, 1, false, false) {
           Err(error) => return Err(error)
-          Ok(compiled) =>
-            for child in compiled {
-              explicit_head.push(child)
-            }
+          Ok(compiled) => explicit_head.append(compiled)
         }
       _ =>
         match compile_node(node, env, 1, false) {
@@ -186,7 +183,7 @@ fn html_head_nodes(
   if options.enable_katex {
     head.push(raw_html_node(HTML_IMPORT_KATEX))
   }
-  append_html_nodes(head, explicit_head)
+  head.append(explicit_head)
   Ok(head)
 }
 
