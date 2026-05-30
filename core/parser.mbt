@@ -183,7 +183,7 @@ fn parse_param_list(
 }
 
 ///|
-fn nodes_to_value(nodes : Array[Node]) -> Value {
+pub fn nodes_to_value(nodes : Array[Node]) -> Value {
   nodes_to_value_at(nodes, nodes[0].span())
 }
 

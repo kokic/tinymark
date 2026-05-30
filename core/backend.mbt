@@ -1,5 +1,24 @@
 ///|
-fn lookup_value(env : Array[Binding], name : String) -> Value? {
+pub(all) struct Binding {
+  name : String
+  value : BindingValue
+}
+
+///|
+pub(all) enum BindingValue {
+  BoundValue(Value)
+  BoundTemplate(Template)
+}
+
+///|
+pub(all) struct Template {
+  params : Array[String]
+  body : Array[Node]
+  env : Array[Binding]
+}
+
+///|
+pub fn lookup_value(env : Array[Binding], name : String) -> Value? {
   let mut index = env.length()
   while index > 0 {
     index -= 1
@@ -15,12 +34,12 @@ fn lookup_value(env : Array[Binding], name : String) -> Value? {
 }
 
 ///|
-fn bind_value(env : Array[Binding], name : String, value : Value) -> Unit {
+pub fn bind_value(env : Array[Binding], name : String, value : Value) -> Unit {
   env.push({ name, value: BindingValue::BoundValue(value) })
 }
 
 ///|
-fn lookup_template(env : Array[Binding], name : String) -> Template? {
+pub fn lookup_template(env : Array[Binding], name : String) -> Template? {
   let mut index = env.length()
   while index > 0 {
     index -= 1
@@ -36,7 +55,7 @@ fn lookup_template(env : Array[Binding], name : String) -> Template? {
 }
 
 ///|
-fn bind_template(
+pub fn bind_template(
   env : Array[Binding],
   name : String,
   params : Array[String],
@@ -49,7 +68,7 @@ fn bind_template(
 }
 
 ///|
-fn bind_meta_attr(env : Array[Binding], attr : Attr) -> Unit {
+pub fn bind_meta_attr(env : Array[Binding], attr : Attr) -> Unit {
   match attr.value {
     Some(value) => bind_value(env, attr.name, value)
     None => ()

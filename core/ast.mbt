@@ -37,7 +37,7 @@ fn DiagnosticPhase::label(self : DiagnosticPhase) -> String {
 }
 
 ///|
-fn SourceSpan::diagnostic(
+pub fn SourceSpan::diagnostic(
   self : SourceSpan,
   phase : DiagnosticPhase,
   message : String,
@@ -101,7 +101,7 @@ pub(all) enum Node {
 }
 
 ///|
-fn Value::span(self : Value) -> SourceSpan {
+pub fn Value::span(self : Value) -> SourceSpan {
   match self {
     Scalar(_, span) | Bool(_, span) | Fragment(_, span) | Interp(_, span) =>
       span
@@ -109,7 +109,7 @@ fn Value::span(self : Value) -> SourceSpan {
 }
 
 ///|
-fn Node::span(self : Node) -> SourceSpan {
+pub fn Node::span(self : Node) -> SourceSpan {
   match self {
     Text(_, span)
     | TextInterp(_, span)
