@@ -207,7 +207,7 @@ fn compile_element(
       compile_admonition(tag, attrs, children, env, heading_level)
     "codeblock" => compile_code(attrs, children, env, heading_level)
     "slot" => compile_slot(attrs, children, env, heading_level)
-    "html.style" => compile_scoped_style(attrs, children, env)
+    "style" => compile_scoped_style(attrs, children, env)
     _ => compile_mapped_element(tag, attrs, children, env, heading_level)
   }
 }
@@ -327,7 +327,7 @@ fn is_source_block_tag(tag : String) -> Bool {
     | "blockquote"
     | "hr"
     | "block"
-    | "html.style" => true
+    | "style" => true
     _ => false
   }
 }
@@ -436,7 +436,7 @@ fn compile_css_rule_node(
         .span()
         .diagnostic(
           DiagnosticPhase::ContentModel,
-          "html.style only accepts css rule elements",
+          "style only accepts css rule elements",
         ),
       )
   }
@@ -455,7 +455,7 @@ fn compile_css_rule_element(
     return Err(
       span.diagnostic(
         DiagnosticPhase::ContentModel,
-        "html.style rules only accept declaration attributes",
+        "style rules only accept declaration attributes",
       ),
     )
   }

@@ -302,7 +302,7 @@ test "dash tag aliases item" {
 test "html scoped style supports pseudo classes" {
   let input =
     #|(html.head
-    #|  (html.style (:scope `article`)
+    #|  (style (:scope `article`)
     #|    (& (:max-width `68ch`))
     #|    (&:hover (:color `red`))
     #|    (a:hover (:text-decoration `underline`))
@@ -329,7 +329,7 @@ test "html scoped style supports pseudo classes" {
 test "html style without scope remains global" {
   let input =
     #|(html.head
-    #|  (html.style
+    #|  (style
     #|    (body (:margin `0`))
     #|    (a:hover (:color `red`))))
     #|Body
@@ -350,10 +350,10 @@ test "html style without scope remains global" {
 
 ///|
 test "html style rejects selector escape hatch" {
-  let input = "(html.style (rule (:selector `h1` :margin `0`)))"
+  let input = "(style (rule (:selector `h1` :margin `0`)))"
   let expected =
     #|content model error at line 1, column 14: css rule form is not supported yet
-    #|1 | (html.style (rule (:selector `h1` :margin `0`)))
+    #|1 | (style (rule (:selector `h1` :margin `0`)))
     #|  |              ^
   @test.assert_eq(render_html_result(input), Err(expected))
 }
