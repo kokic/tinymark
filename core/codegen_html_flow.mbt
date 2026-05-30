@@ -123,6 +123,7 @@ fn is_block_tag(tag : String) -> Bool {
     | "pre"
     | "div"
     | "p"
+    | "style"
     | "blockquote"
     | "hr" => true
     _ => tag.has_prefix("h")

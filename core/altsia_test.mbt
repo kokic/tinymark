@@ -299,6 +299,66 @@ test "dash tag aliases item" {
 }
 
 ///|
+test "html scoped style supports pseudo classes" {
+  let input =
+    #|(html.head
+    #|  (html.style (:scope `article`)
+    #|    (& (:max-width `68ch`))
+    #|    (&:hover (:color `red`))
+    #|    (a:hover (:text-decoration `underline`))
+    #|    (.lead::first-line (:font-weight `700`))
+    #|    (h1 (:margin `0`))
+    #|    (h2:focus-within (:color `blue`))))
+    #|(block (:class `article`) Body)
+  let expected =
+    #|<html>
+    #|  <head>
+    #|    <style>.article{max-width:68ch;}.article:hover{color:red;}.article a:hover{text-decoration:underline;}.article .lead::first-line{font-weight:700;}.article h1{margin:0;}.article h2:focus-within{color:blue;}</style>
+    #|  </head>
+    #|  <body>
+    #|    <div class="article">Body</div>
+    #|  </body>
+    #|</html>
+  @test.assert_eq(
+    render_html_document_result(input, options=HtmlDocumentOptions::empty()),
+    Ok(expected),
+  )
+}
+
+///|
+test "html style without scope remains global" {
+  let input =
+    #|(html.head
+    #|  (html.style
+    #|    (body (:margin `0`))
+    #|    (a:hover (:color `red`))))
+    #|Body
+  let expected =
+    #|<html>
+    #|  <head>
+    #|    <style>body{margin:0;}a:hover{color:red;}</style>
+    #|  </head>
+    #|  <body>
+    #|    <p>Body</p>
+    #|  </body>
+    #|</html>
+  @test.assert_eq(
+    render_html_document_result(input, options=HtmlDocumentOptions::empty()),
+    Ok(expected),
+  )
+}
+
+///|
+test "html style rejects selector escape hatch" {
+  let input = "(html.style (rule (:selector `h1` :margin `0`)))"
+  let expected =
+    #|content model error at line 1, column 14: css rule form is not supported yet
+    #|1 | (html.style (rule (:selector `h1` :margin `0`)))
+    #|  |              ^
+  @test.assert_eq(render_html_result(input), Err(expected))
+}
+
+///|
 test "html document uses altsia meta and explicit html head" {
   let input =
     #|(meta 

@@ -9,6 +9,12 @@ priv enum ContentModel {
 }
 
 ///|
+priv struct CssStyleAttrs {
+  html_attrs : Array[(String, String?)]
+  scope : String?
+}
+
+///|
 pub fn altsia_to_sexp_nodes(
   source : String,
 ) -> Result[Array[HtmlNode], Diagnostic] {
@@ -201,6 +207,7 @@ fn compile_element(
       compile_admonition(tag, attrs, children, env, heading_level)
     "codeblock" => compile_code(attrs, children, env, heading_level)
     "slot" => compile_slot(attrs, children, env, heading_level)
+    "html.style" => compile_scoped_style(attrs, children, env)
     _ => compile_mapped_element(tag, attrs, children, env, heading_level)
   }
 }
@@ -319,8 +326,260 @@ fn is_source_block_tag(tag : String) -> Bool {
     | "p"
     | "blockquote"
     | "hr"
-    | "block" => true
+    | "block"
+    | "html.style" => true
     _ => false
+  }
+}
+
+///|
+fn compile_scoped_style(
+  attrs : Array[Attr],
+  children : Array[Node],
+  env : Array[Binding],
+) -> Result[Array[HtmlNode], Diagnostic] {
+  let style_attrs = match compile_style_attrs(attrs, env) {
+    Ok(value) => value
+    Err(error) => return Err(error)
+  }
+  let rules = match compile_css_rule_nodes(children, style_attrs.scope, env) {
+    Ok(value) => value
+    Err(error) => return Err(error)
+  }
+  Ok([
+    HtmlNode::Element("style", style_attrs.html_attrs, [
+      HtmlNode::RawHtml(rules.join("")),
+    ]),
+  ])
+}
+
+///|
+fn compile_style_attrs(
+  attrs : Array[Attr],
+  env : Array[Binding],
+) -> Result[CssStyleAttrs, Diagnostic] {
+  let html_attrs : Array[(String, String?)] = []
+  let mut scope : String? = None
+  for attr in attrs {
+    if attr.name == "scope" {
+      match compile_style_scope(attr, env) {
+        Ok(value) => scope = Some(value)
+        Err(error) => return Err(error)
+      }
+      continue
+    }
+    match compile_attr_value(attr.value, env) {
+      Ok(compiled) => html_attrs.push((attr.name, compiled))
+      Err(error) => return Err(error)
+    }
+  }
+  Ok({ html_attrs, scope })
+}
+
+///|
+fn compile_style_scope(
+  attr : Attr,
+  env : Array[Binding],
+) -> Result[String, Diagnostic] {
+  let value = match attr.value {
+    Some(value) => value
+    None =>
+      return Err(
+        attr.span.diagnostic(
+          DiagnosticPhase::Type,
+          "style scope requires a value",
+        ),
+      )
+  }
+  let text = match value_to_scalar(value, env) {
+    Ok(text) => text
+    Err(error) => return Err(error)
+  }
+  if text.trim().is_empty() {
+    return Err(
+      attr.span.diagnostic(DiagnosticPhase::Type, "style scope cannot be empty"),
+    )
+  }
+  Ok(normalize_css_scope(text))
+}
+
+///|
+fn compile_css_rule_nodes(
+  children : Array[Node],
+  scope : String?,
+  env : Array[Binding],
+) -> Result[Array[String], Diagnostic] {
+  let rules : Array[String] = []
+  for child in children {
+    match compile_css_rule_node(child, scope, env) {
+      Ok(Some(rule)) => rules.push(rule)
+      Ok(None) => ()
+      Err(error) => return Err(error)
+    }
+  }
+  Ok(rules)
+}
+
+///|
+fn compile_css_rule_node(
+  node : Node,
+  scope : String?,
+  env : Array[Binding],
+) -> Result[String?, Diagnostic] {
+  match node {
+    Element(tag, attrs, children, span) =>
+      compile_css_rule_element(tag, attrs, children, scope, env, span)
+    Text(text, _) if text.trim().is_empty() => Ok(None)
+    _ =>
+      Err(
+        node
+        .span()
+        .diagnostic(
+          DiagnosticPhase::ContentModel,
+          "html.style only accepts css rule elements",
+        ),
+      )
+  }
+}
+
+///|
+fn compile_css_rule_element(
+  tag : String,
+  attrs : Array[Attr],
+  children : Array[Node],
+  scope : String?,
+  env : Array[Binding],
+  span : SourceSpan,
+) -> Result[String?, Diagnostic] {
+  if !children.is_empty() {
+    return Err(
+      span.diagnostic(
+        DiagnosticPhase::ContentModel,
+        "html.style rules only accept declaration attributes",
+      ),
+    )
+  }
+  match compile_css_rule(tag, attrs, scope, env, span) {
+    Ok(rule) => Ok(Some(rule))
+    Err(error) => Err(error)
+  }
+}
+
+///|
+fn normalize_css_scope(scope : String) -> String {
+  let trimmed = scope.trim().to_owned()
+  if trimmed.has_prefix(".") ||
+    trimmed.has_prefix("#") ||
+    trimmed.has_prefix("[") ||
+    trimmed.has_prefix(":") ||
+    trimmed.has_prefix("*") {
+    trimmed
+  } else {
+    "." + trimmed
+  }
+}
+
+///|
+fn compile_css_rule(
+  tag : String,
+  attrs : Array[Attr],
+  scope : String?,
+  env : Array[Binding],
+  span : SourceSpan,
+) -> Result[String, Diagnostic] {
+  if tag == "rule" {
+    return Err(
+      span.diagnostic(
+        DiagnosticPhase::ContentModel,
+        "css rule form is not supported yet",
+      ),
+    )
+  }
+  let scoped_selector = match scope_css_selector(tag, scope, span) {
+    Ok(value) => value
+    Err(error) => return Err(error)
+  }
+  let declarations = match compile_css_declarations(attrs, env) {
+    Ok(value) => value
+    Err(error) => return Err(error)
+  }
+  Ok(scoped_selector + "{" + declarations + "}")
+}
+
+///|
+fn compile_css_declarations(
+  attrs : Array[Attr],
+  env : Array[Binding],
+) -> Result[String, Diagnostic] {
+  let declarations : Array[String] = []
+  for attr in attrs {
+    if attr.name == "selector" {
+      return Err(
+        attr.span.diagnostic(
+          DiagnosticPhase::ContentModel,
+          "css selector attribute is not supported",
+        ),
+      )
+    }
+    match attr.value {
+      Some(value) =>
+        match value_to_scalar(value, env) {
+          Ok(text) => declarations.push(attr.name + ":" + text + ";")
+          Err(error) => return Err(error)
+        }
+      None =>
+        return Err(
+          attr.span.diagnostic(
+            DiagnosticPhase::Type,
+            "css declaration requires a value: " + attr.name,
+          ),
+        )
+    }
+  }
+  Ok(declarations.join(""))
+}
+
+///|
+fn scope_css_selector(
+  selector : String,
+  scope : String?,
+  span : SourceSpan,
+) -> Result[String, Diagnostic] {
+  let trimmed = selector.trim().to_owned()
+  if trimmed.is_empty() {
+    return Err(
+      span.diagnostic(
+        DiagnosticPhase::ContentModel,
+        "css selector cannot be empty",
+      ),
+    )
+  }
+  if trimmed.contains(",") {
+    return Err(
+      span.diagnostic(
+        DiagnosticPhase::ContentModel,
+        "css selector lists are not supported; write separate rules",
+      ),
+    )
+  }
+  match scope {
+    None =>
+      if trimmed.contains("&") {
+        Err(
+          span.diagnostic(
+            DiagnosticPhase::ContentModel,
+            "css selector '&' requires a style scope",
+          ),
+        )
+      } else {
+        Ok(trimmed)
+      }
+    Some(scope_selector) =>
+      if trimmed.contains("&") {
+        Ok(trimmed.replace_all(old="&", new=scope_selector))
+      } else {
+        Ok(scope_selector + " " + trimmed)
+      }
   }
 }
 
